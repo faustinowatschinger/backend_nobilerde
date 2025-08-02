@@ -10,6 +10,9 @@ const usersConn = mongoose.createConnection(process.env.MONGODB_URI_USERS);
 // Conexión a la base de yerbas
 const yerbasConn = mongoose.createConnection(process.env.MONGODB_URI_YERBAS);
 
+// Conexión a la base de precios (para stores y precios)
+const pricesConn = mongoose.createConnection(process.env.MONGODB_URI_PRECIOS || process.env.MONGODB_URI_YERBAS);
+
 // Manejo de errores
 usersConn.on('error', err => {
   console.error('❌ Error de conexión a Usuarios DB:', err);
@@ -17,9 +20,13 @@ usersConn.on('error', err => {
 yerbasConn.on('error', err => {
   console.error('❌ Error de conexión a Yerbas DB:', err);
 });
+pricesConn.on('error', err => {
+  console.error('❌ Error de conexión a Precios DB:', err);
+});
 
 // Logueo al conectar
 usersConn.once('open', () => console.log('✅ Usuarios DB conectada'));
 yerbasConn.once('open', () => console.log('✅ Yerbas DB conectada'));
+pricesConn.once('open', () => console.log('✅ Precios DB conectada'));
 
-export { usersConn, yerbasConn };
+export { usersConn, yerbasConn, pricesConn };

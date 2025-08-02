@@ -23,6 +23,7 @@ const YerbaSchema = new Schema({
   produccion:      { type: String },
   imagenURL:       { type: String },
   affiliateLink:   { type: String },
+  ean:             { type: Number }, // Código EAN para buscar precios
   reviews:         { type: [ReviewSchema], default: [] },
   createdAt:       { type: Date, default: Date.now }
 });

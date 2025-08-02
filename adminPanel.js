@@ -142,7 +142,10 @@ const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
   admin,
   {
     authenticate: async (email, password) => {
-      const adminUser = await User.findOne({ email, role: 'admin' });
+      const adminUser = await User.findOne({ 
+        email, 
+        role: { $in: ['admin', 'pro'] } 
+      });
       if (!adminUser) return null;
       const match = await adminUser.comparePassword(password);
       return match ? adminUser : null;

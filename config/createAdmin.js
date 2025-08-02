@@ -15,8 +15,12 @@ if (existing) {
 
 const admin = new User({
   username: 'admin',
+  nombre: 'Administrador',
+  apellido: 'Sistema',
   email: adminEmail,
   password: adminPass, // el hook pre('save') lo va a hashear
+  fechaNacimiento: '1990-01-01',
+  termosDia: 1,
   role: 'admin'
 })
 

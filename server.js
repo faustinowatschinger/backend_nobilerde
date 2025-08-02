@@ -5,13 +5,12 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
-import { usersConn, yerbasConn } from './config/multiDB.js';
+import { usersConn, yerbasConn, pricesConn } from './config/multiDB.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- Modelos (se cargan para registrar en las respectivas conexiones)
 import { Yerba } from './config/yerbasModel.js';
 import User from './config/userModel.js';
 
@@ -20,12 +19,14 @@ import userRoutes  from './routes/usersRoutes.js';
 import yerbaRoutes from './routes/yerbasRoutes.js';
 import authRoutes  from './routes/authRoutes.js';
 import recommendationsRoutes from './routes/recommendationsRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 
 // Montar rutas
 app.use('/users',  userRoutes);
 app.use('/yerbas', yerbaRoutes);
 app.use('/auth',   authRoutes);
 app.use('/api',    recommendationsRoutes);
+app.use('/api/ai', aiRoutes);
 
 // STATIC  ─ sirve las imágenes que realmente viven en public/yerbas
 app.use(
@@ -78,6 +79,8 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`🚀 Servidor escuchando en puerto ${PORT}`));
+app.listen(PORT, async () => {
+  console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
+});
 
 export default app;

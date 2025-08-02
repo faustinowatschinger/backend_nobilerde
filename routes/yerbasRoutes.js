@@ -73,7 +73,7 @@ router.post('/', uploadYerba.single('foto'), async (req, res, next) => {
 
 router.put('/:id', uploadYerba.single('foto'), async (req, res, next) => {
   try {
-    const allowedFields = ['nombre', 'marca', 'establecimiento', 'tipo', 'containsPalo', 'leafCut', 'origen', 'pais', 'secado', 'tipoEstacionamiento', 'tiempoEstacionamiento', 'produccion', 'imagenURL']; // etc.
+    const allowedFields = ['nombre', 'marca', 'establecimiento', 'tipo', 'containsPalo', 'leafCut', 'origen', 'pais', 'secado', 'tipoEstacionamiento', 'tiempoEstacionamiento', 'produccion', 'imagenURL', 'ean']; // etc.
 
     const updateData = {};
     for (let key of allowedFields) {
