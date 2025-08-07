@@ -30,23 +30,23 @@ transporter.verify((error, success) => {
 });
 
 const sendVerificationEmail = async (email, code, username = '') => {
-  // Modo desarrollo: simular envío exitoso
-  if (process.env.NODE_ENV === 'development' || !process.env.EMAIL_USER) {
-    console.log('📧 MODO DESARROLLO - Email simulado');
+  // Si no hay credenciales configuradas, simular envío
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log('📧 MODO SIMULACIÓN - Credenciales no configuradas');
     console.log('📧 Para:', email);
     console.log('📧 Código:', code);
-    console.log('📧 En producción, configura las credenciales de Gmail correctamente');
+    console.log('📧 Configura EMAIL_USER y EMAIL_PASS para envío real');
     return { success: true, messageId: 'dev-simulation' };
   }
 
   try {
     const mailOptions = {
       from: {
-        name: 'NobleErde',
+        name: 'Nobilerde',
         address: process.env.EMAIL_USER
       },
       to: email,
-      subject: 'Verificación de Email - NobleErde',
+      subject: 'Verificación de Email - Nobilerde',
       html: `
         <!DOCTYPE html>
         <html>
@@ -119,4 +119,85 @@ const sendVerificationEmail = async (email, code, username = '') => {
   }
 };
 
-export { sendVerificationEmail };
+const sendPasswordResetEmail = async (email, code, username = '') => {
+  // Si no hay credenciales configuradas, simular envío
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log('📧 MODO SIMULACIÓN - Credenciales no configuradas');
+    console.log('📧 Para:', email);
+    console.log('📧 Código de reset:', code);
+    console.log('📧 Configura EMAIL_USER y EMAIL_PASS para envío real');
+    return { success: true, messageId: 'dev-simulation' };
+  }
+
+  try {
+    const mailOptions = {
+      from: {
+        name: 'NobleErde',
+        address: process.env.EMAIL_USER
+      },
+      to: email,
+      subject: 'Restablecer Contraseña - NobleErde',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; background-color: #FEFAE0; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #5F6F52, #B99470); color: white; padding: 30px; text-align: center; }
+            .content { padding: 30px; }
+            .code { background: #f5f5f5; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 24px; font-weight: bold; text-align: center; color: #5F6F52; border: 2px dashed #B99470; }
+            .footer { background: #f8f8f8; padding: 20px; text-align: center; color: #666; }
+            .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🧉 Nobilerde</h1>
+              <h2>Restablecer Contraseña</h2>
+            </div>
+            <div class="content">
+              <p>Hola${username ? ` ${username}` : ''},</p>
+              <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en Nobilerde.</p>
+              <p>Usa el siguiente código para restablecer tu contraseña:</p>
+              <div class="code">${code}</div>
+              <div class="warning">
+                <strong>⚠️ Importante:</strong>
+                <ul>
+                  <li>Este código es válido por 15 minutos</li>
+                  <li>Si no solicitaste este cambio, ignora este email</li>
+                  <li>No compartas este código con nadie</li>
+                </ul>
+              </div>
+              <p>Si tienes problemas o no solicitaste este cambio, contáctanos de inmediato.</p>
+            </div>
+            <div class="footer">
+              <p>Este email fue enviado desde Nobilerde - Tu comunidad de yerba mate 🧉</p>
+              <p>© 2025 Nobilerde. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email de reset de contraseña enviado:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ Error enviando email de reset:', error);
+    
+    // En desarrollo, retornar éxito para poder probar el flujo
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📧 MODO DESARROLLO - Simulando éxito a pesar del error');
+      console.log('📧 Código de reset para verificar:', code);
+      return { success: true, messageId: 'dev-fallback' };
+    }
+    
+    return { success: false, error: error.message };
+  }
+};
+
+export { sendVerificationEmail, sendPasswordResetEmail };

@@ -1,7 +1,14 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 dotenv.config();
+
+// Obtener el directorio actual
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class OpenAIService {
   constructor() {
@@ -14,6 +21,23 @@ class OpenAIService {
     this.client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
+
+    // Cargar las tablas de conocimiento sobre yerba mate
+    this.loadYerbaTables();
+  }
+
+  /**
+   * Cargar las tablas de conocimiento técnico sobre yerba mate
+   */
+  loadYerbaTables() {
+    try {
+      const tablesPath = path.join(__dirname, '..', 'yerba_tables.json');
+      this.yerbaTables = JSON.parse(readFileSync(tablesPath, 'utf8'));
+      console.log('✅ Tablas de conocimiento de yerba mate cargadas correctamente');
+    } catch (error) {
+      console.error('❌ Error cargando tablas de yerba mate:', error);
+      this.yerbaTables = null;
+    }
   }
 
   /**
@@ -94,7 +118,67 @@ class OpenAIService {
    * Construir el prompt del sistema para OpenAI
    */
   buildSystemPrompt() {
+    let knowledgeBase = '';
+    
+    if (this.yerbaTables) {
+      knowledgeBase = `
+CONOCIMIENTO TÉCNICO SOBRE YERBA MATE:
+
+## SISTEMAS DE SECADO:
+${this.yerbaTables.secado.map(item => 
+  `• ${item.Sistema}: ${item.Procedimiento} → ${item["Efecto sensorial principal"]}`
+).join('\n')}
+
+## VARIABLES CLAVE DE COMPOSICIÓN:
+${this.yerbaTables.variable_clave.map(item => 
+  `• ${item["Variable clave"]}: Sin palo: ${item["Yerbas extra-finas sin palo"]} | Con palo: ${item["Yerbas con palo y corte medio"]}`
+).join('\n')}
+
+## IMPACTO DE LA MOLIENDA:
+${this.yerbaTables.molienda_impacto.map(item => 
+  `• ${item.Grado} (${item["Corte típico"]}): ${item.Impacto}`
+).join('\n')}
+
+## ESTACIONAMIENTO:
+${this.yerbaTables.estacionamiento.map(item => 
+  `• ${item.Modalidad} (${item.Tiempo}): ${item["Cambios principales"]}`
+).join('\n')}
+
+## TIPOS COMERCIALES:
+${this.yerbaTables.tipos_comerciales.map(item => 
+  `• ${item.Tipo}: ${item.Diferencial} → ${item.Experiencia}`
+).join('\n')}
+
+## ENFOQUES DE PRODUCCIÓN:
+${this.yerbaTables.produccion.map(item => 
+  `• ${item.Enfoque}: ${item.Características} → ${item.Resultado}`
+).join('\n')}
+
+## HIERBAS Y AÑADIDOS:
+${this.yerbaTables.hierbas_y_añadidos.map(item => 
+  `• ${item.Ingrediente}: ${item["Nota aromática"]} - ${item["Propósito tradicional"]}`
+).join('\n')}
+
+## ORÍGENES GEOGRÁFICOS:
+${this.yerbaTables.origen_geografico.map(item => 
+  `• ${item.Región}: ${item["Rasgos agronómicos"]} → ${item["Perfil típico"]}`
+).join('\n')}
+
+`;
+    }
+
     return `Sos un sommelier experto en yerba mate. Tu tarea es interpretar el pedido en lenguaje natural de un usuario que busca una yerba específica para tomar mate.
+
+${knowledgeBase}
+
+INSTRUCCIONES:
+1. Analizá cuidadosamente lo que el usuario solicita
+2. Usá el conocimiento técnico arriba para identificar qué características se alinean mejor con sus necesidades
+3. Inferí las características que no mencione explícitamente basándote en:
+   - Combinaciones técnicas más habituales
+   - Perfiles sensoriales que coincidan con su pedido
+   - Relaciones entre origen, secado, molienda y experiencia de cebado
+4. Si el usuario menciona hierbas específicas (menta, burro, coco, boldo, cedrón, etc.) o dice que quiere una yerba "compuesta", incluye esas hierbas en el campo "composicionBuscada"
 
 Debés responder con un único objeto JSON válido, que incluya **todas las características** que debería tener la yerba ideal para esa persona. Aunque el usuario no mencione explícitamente una característica, **debes inferir la mejor opción posible** según el pedido, tu conocimiento del mate, y las combinaciones más habituales.
 
@@ -103,7 +187,6 @@ Usá **solo los valores permitidos** para cada campo (listados abajo). No invent
 Tu respuesta debe tener esta estructura:
 
 {
-  "tipo": string,                     // Una de: "Tradicional", "Suave", "Despalada", "Barbacuá", "Compuesta", "Orgánica", "Premium/Selección", "Instantánea (soluble)", "Saquitos/Tea Bags"
   "containsPalo": string,            // "Sí" o "No"
   "leafCut": string,                 // Una de: "Extra fina", "Fina", "Media", "Gruesa", "Canchada"
   "origen": string,                  // Una de: "Misiones", "Corrientes", "Entre Ríos", "Rio Grande do Sul", "Paraná (BR)", "Santa Catarina", "Itapúa", "Alto Paraná", "Caazapá", "Canindeyú"
@@ -111,9 +194,34 @@ Tu respuesta debe tener esta estructura:
   "secado": string,                  // Una de: "Barbacuá", "A cintas (sapecado)", "Rotativo/Túnel", "Carijó (indirecto a leña)"
   "tipoEstacionamiento": string,    // "Natural" o "Acelerado/Controlado"
   "tiempoEstacionamiento": string,  // Una de: "Sin estacionar (0-30 días)", "3-6 meses", "6-12 meses", "12-24 meses", ">24 meses"
-  "produccion": string               // Una de: "Industrial", "Artesanal/Familiar", "Agroecológica", "Orgánica certificada"
+  "produccion": string,              // Una de: "Industrial", "Artesanal/Familiar", "Agroecológica", "Orgánica certificada"
+  "composicionBuscada": [string] | null  // Array de hierbas específicas mencionadas ("Menta", "Burro", "Coco", etc.) o null si no se mencionan
 }
-No agregues ningún texto fuera del JSON. No expliques tus decisiones. Simplemente devolvé el objeto completo con los 13 campos rellenados con los valores correctos.`;
+
+COMPOSICIONES DISPONIBLES: Menta, Burro, Coco, Peperina, Boldo, Cedrón, Poleo, Tilo, Manzanilla, Eucalipto, Limón, Naranja, Pomelo
+
+NOTA IMPORTANTE: No incluyas el campo "tipo" en la respuesta. El tipo comercial se deducirá automáticamente basado en las características técnicas que proporciones.
+
+EJEMPLOS DE RAZONAMIENTO:
+- Si pide "suave para estómago sensible" → molienda gruesa + estacionamiento largo + secado indirecto
+- Si pide "intensa para estudiar" → sin palo (despalada si es Argentina) + molienda fina + alta densidad de hoja
+- Si pide "tradicional argentina" → con palo + secado barbacuá + estacionamiento natural
+- Si pide "sin humo" → secado indirecto moderno o a cintas
+- Si pide "que rinda mucho" → molienda fina + alta proporción de hoja + buena compactación
+- Si pide "brasileña tradicional" → puede ser con o sin palo según preferencia, no necesariamente despalada
+- Si pide "con menta para la digestión" → composicionBuscada: ["Menta"] + características que faciliten digestión
+- Si pide "compuesta con hierbas digestivas" → composicionBuscada: ["Boldo", "Cedrón"] + producción artesanal
+- Si pide "aromática cítrica"→ composicionBuscada: ["Cáscara de naranja / Limón"] + secado indirecto moderno + molienda media-fina
+- Si pide "energética y espumosa" → despalada (≥ 90 % hoja) + molienda extra fina (≤ 0,5 mm) + alta densidad de hoja
+- Si pide "rústica con toque ahumado" → secado Barbacuá + producción Artesanal / Barbacuá + molienda gruesa
+- Si pide "relajante floral" → composicionBuscada: ["Manzanilla / Tilo / Melissa"] + secado indirecto moderno + estacionamiento Natural (9–24 meses)
+- Si pide "premium reserva" → estacionamiento > 24 meses + molienda media-fina (≈ 1 mm) + extracción más lenta (partículas medianas)
+- Si pide "orgánica limpia" → producción Orgánico / Agroecológico + secado indirecto moderno + molienda media-fina
+- Si pide "para tereré refrescante" → secado a cintas (“sapecado”) + composicionBuscada: ["Cáscara de naranja / Limón"] + estacionamiento acelerado (30–90 días)
+- Si pide "para competición deportiva" → despalada + molienda extra fina (≤ 0,5 mm) + densidad alta (40–50 g por calabaza) + secado a cintas
+- Si pide "amargo prolongado" → molienda extra fina + alta proporción de hoja (≥ 90 %) + extracción muy rápida + estacionamiento Natural
+- Si pide "suave con palo" → Tradicional con palo + molienda media-fina + estacionamiento Natural (9–24 meses)
+No agregues ningún texto fuera del JSON. No expliques tus decisiones. Simplemente devolvé el objeto completo con los campos técnicos rellenados con los valores correctos.`;
   }
 
   /**
@@ -122,7 +230,6 @@ No agregues ningún texto fuera del JSON. No expliques tus decisiones. Simplemen
   validateAndCleanResponse(response) {
     // Valores permitidos para cada campo
     const allowedValues = {
-      tipo: ["Tradicional", "Suave", "Despalada", "Barbacuá", "Compuesta", "Orgánica", "Premium/Selección", "Instantánea (soluble)", "Saquitos/Tea Bags"],
       containsPalo: ["Sí", "No"],
       leafCut: ["Extra fina", "Fina", "Media", "Gruesa", "Canchada"],
       origen: ["Misiones", "Corrientes", "Entre Ríos", "Rio Grande do Sul", "Paraná (BR)", "Santa Catarina", "Itapúa", "Alto Paraná", "Caazapá", "Canindeyú"],
@@ -130,15 +237,11 @@ No agregues ningún texto fuera del JSON. No expliques tus decisiones. Simplemen
       secado: ["Barbacuá", "A cintas (sapecado)", "Rotativo/Túnel", "Carijó (indirecto a leña)"],
       tipoEstacionamiento: ["Natural", "Acelerado/Controlado"],
       tiempoEstacionamiento: ["Sin estacionar (0-30 días)", "3-6 meses", "6-12 meses", "12-24 meses", ">24 meses"],
-      produccion: ["Industrial", "Artesanal/Familiar", "Agroecológica", "Orgánica certificada"]
+      produccion: ["Industrial", "Artesanal/Familiar", "Agroecológica", "Orgánica certificada"],
+      composicion: ["Menta", "Burro", "Coco", "Peperina", "Boldo", "Cedrón", "Poleo", "Tilo", "Manzanilla", "Eucalipto", "Limón", "Naranja", "Pomelo"]
     };
 
-    const allowedBrands = ["Amanda","Andresito","Aguantadora","CBSé","Cachamate","Cruz de Malta","Kraus","La Merced","Mañanita","Mate Rojo","Nobleza Gaucha","Origen","Playadito","Piporé","Rosamonte","Taragüi","Unión","Titrayjú","Kalena","Barão de Cotegipe","Baldo","Rei Verde","Ximango","Yacuy","Mate Leão","Canarias","Sara","Del Cebador","Contigo","Baldo (UY)","Pajarito","Selecta","Kurupi","Campesino","Colón","Guaraní","Ruvicha","La Rubia","Indega","Guayakí","Grapia Milenaria","Jesper","Mate Amos","Federal","Mateando"];
-
-    const allowedEstablecimientos = ["Las Marías","Coop. Colonia Liebig","Coop. Yerba Andresito","Molinos La Misión","Coop. Agrícola Oberá","Hreñuk S.A. (Rosamonte)","CBT (Playadito)","La Cachamate S.A.","Kraus S.A.","Indústrias Barão","Baldo S.A.","Rei Verde Industria de Erva-Mate","Sara S.A.","Pajarito S.R.L.","Selecta S.A.","Kurupi Laboratorios y Herbarios","Campesino S.A.","Guayakí SRP","Mate Leão (Coca-Cola)","Santo Pipó SCL","San Demetrio","La Cachuera","Carrau & Cia"];
-
     const cleaned = {
-      tipo: allowedValues.tipo.includes(response.tipo) ? response.tipo : allowedValues.tipo[0],
       containsPalo: allowedValues.containsPalo.includes(response.containsPalo) ? response.containsPalo : allowedValues.containsPalo[0],
       leafCut: allowedValues.leafCut.includes(response.leafCut) ? response.leafCut : allowedValues.leafCut[0],
       origen: allowedValues.origen.includes(response.origen) ? response.origen : allowedValues.origen[0],
@@ -149,7 +252,58 @@ No agregues ningún texto fuera del JSON. No expliques tus decisiones. Simplemen
       produccion: allowedValues.produccion.includes(response.produccion) ? response.produccion : allowedValues.produccion[0]
     };
 
+    // Validar y limpiar composicionBuscada si está presente
+    if (response.composicionBuscada && Array.isArray(response.composicionBuscada)) {
+      const validComposiciones = response.composicionBuscada.filter(comp => 
+        allowedValues.composicion.includes(comp)
+      );
+      if (validComposiciones.length > 0) {
+        cleaned.composicionBuscada = validComposiciones;
+      }
+    }
+
+    // NO agregamos el tipo aquí - será calculado solo cuando se guarde en la BD
     return cleaned;
+  }
+
+  /**
+   * Deducir el tipo comercial basado en características técnicas
+   */
+  deducirTipo(caracteristicas) {
+    const { pais, containsPalo, produccion, secado, leafCut } = caracteristicas;
+
+    // Orgánica certificada
+    if (produccion === "Orgánica certificada") {
+      return "Orgánica";
+    }
+
+    // Barbacuá (secado especial)
+    if (secado === "Barbacuá") {
+      return "Barbacuá";
+    }
+
+    // Despalada (sin palo en Argentina/Uruguay)
+    if (containsPalo === "No" && (pais === "Argentina" || pais === "Uruguay")) {
+      return "Despalada";
+    }
+
+    // Suave (características que indican suavidad)
+    if ((leafCut === "Gruesa" || leafCut === "Canchada") && containsPalo === "Sí") {
+      return "Suave";
+    }
+
+    // Compuesta (si tiene características especiales o artesanales)
+    if (produccion === "Artesanal/Familiar" && containsPalo === "Sí") {
+      return "Compuesta";
+    }
+
+    // Premium/Selección (características premium)
+    if (produccion === "Agroecológica" || leafCut === "Extra fina") {
+      return "Premium/Selección";
+    }
+
+    // Por defecto: Tradicional
+    return "Tradicional";
   }
 
   /**
@@ -158,8 +312,10 @@ No agregues ningún texto fuera del JSON. No expliques tus decisiones. Simplemen
   getUsageStats() {
     return {
       serviceEnabled: !!this.client,
+      knowledgeBaseLoaded: !!this.yerbaTables,
       lastRequest: this.lastRequestTime || null,
-      systemPromptVersion: '2.0-13fields'
+      systemPromptVersion: '3.0-with-technical-knowledge',
+      tablesLoaded: this.yerbaTables ? Object.keys(this.yerbaTables).length : 0
     };
   }
 
@@ -170,11 +326,14 @@ No agregues ningún texto fuera del JSON. No expliques tus decisiones. Simplemen
     return [
       "Quiero una yerba suave para tomar en la mañana, sin mucho palo y que no sea muy amarga",
       "Busco algo intenso y duradero para estudiar, preferiblemente de Argentina",
-      "Me gusta Amanda tradicional pero quiero probar algo similar de otra marca",
-      "Necesito una yerba sin humo, tipo barbacuá, que sea equilibrada y dure mucho",
+      "Me gusta el sabor ahumado tipo barbacuá pero que no sea tan fuerte",
+      "Necesito una yerba sin humo, bien equilibrada y que dure mucho en el mate",
       "Quiero algo tradicional de Misiones, con molienda media y bien estacionada",
-      "Busco una yerba orgánica, suave, ideal para principiantes",
-      "Necesito algo fuerte tipo despalada para compartir en rondas largas"
+      "Busco una yerba orgánica, suave, ideal para principiantes que tienen estómago sensible",
+      "Necesito algo fuerte tipo despalada para compartir en rondas largas con amigos",
+      "Quiero una yerba brasileña sin palo que haga mucha espuma y sea intensa",
+      "Busco algo artesanal, con notas dulces y que sea de producción familiar",
+      "Necesito una yerba compuesta con hierbas digestivas para después de comer"
     ];
   }
 }

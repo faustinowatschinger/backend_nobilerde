@@ -5,7 +5,7 @@ const ReviewSchema = new Schema({
   _id:      { type: Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
   user:     { type: Schema.Types.ObjectId, ref: 'User', required: true },
   score:    { type: Number, min: 1, max: 5, required: true },
-  comment:  { type: String, required: true },
+  comment:  { type: String, required: false }, // Cambiado a false para permitir reviews sin comentario
   createdAt:{ type: Date, default: Date.now }
 });
 const YerbaSchema = new Schema({
@@ -21,6 +21,7 @@ const YerbaSchema = new Schema({
   tipoEstacionamiento: { type: String },
   tiempoEstacionamiento: { type: String },
   produccion:      { type: String },
+  composicion:     { type: [String], default: [] }, // Array para múltiples composiciones en yerbas compuestas
   imagenURL:       { type: String },
   affiliateLink:   { type: String },
   ean:             { type: Number }, // Código EAN para buscar precios

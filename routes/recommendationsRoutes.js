@@ -2,6 +2,7 @@ import express from 'express';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import { authenticateToken } from '../auth/middleware/authMiddleware.js';
 import { Yerba } from '../config/yerbasModel.js';
 
@@ -14,13 +15,32 @@ const router = express.Router();
 router.get('/recommendations', authenticateToken, async (req, res) => {
   try {
     const userId = req.userId; // ID del usuario autenticado desde el middleware
-    console.log(`🚀 Generando recomendaciones para usuario: ${userId}`);
+    console.log(`🚀 Generando recomendaciones avanzadas para usuario: ${userId}`);
+    console.log(`⚡ MODO: Reentrenamiento forzado para datos actualizados`);
 
-    // Ruta al script de IA
-    const aiScriptPath = path.join(__dirname, '../../ai-engine/pipeline_completo.py');
+    // Pipeline único: solo el mejorado (avanzado limpio)
+    const pipelines = [
+      { name: 'pipeline_mejorado.py', desc: 'Pipeline avanzado único' }
+    ];
+    
+    let scriptToUse = null;
+    for (const pipeline of pipelines) {
+      const scriptPath = path.join(__dirname, '../../ai-engine', pipeline.name);
+      if (fs.existsSync(scriptPath)) {
+        scriptToUse = { path: scriptPath, name: pipeline.name, desc: pipeline.desc };
+        break;
+      }
+    }
+    
+    if (!scriptToUse) {
+      throw new Error('No se encontró ningún pipeline de recomendaciones');
+    }
+    
+    console.log(`📜 Usando: ${scriptToUse.desc} (${scriptToUse.name})`);
     
     // Ejecutar el pipeline de IA con el userId
-    const pythonProcess = spawn('python', [aiScriptPath, userId], {
+    // FORZAR REENTRENAMIENTO para asegurar datos actualizados
+    const pythonProcess = spawn('python', [scriptToUse.path, userId, '--retrain'], {
       cwd: path.join(__dirname, '../../ai-engine'),
       stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -128,12 +148,15 @@ router.get('/recommendations', authenticateToken, async (req, res) => {
           }
 
           console.log('✅ Recomendaciones procesadas:', recommendations.length);
+          console.log('🕒 Timestamp de generación:', new Date().toISOString());
 
           res.json({
             success: true,
             userId: userId,
             recommendations: recommendations,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            dynamicUpdate: true, // Indica que se forzó actualización
+            totalRecommendations: recommendations.length
           });
 
         } catch (parseError) {

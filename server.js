@@ -20,6 +20,7 @@ import yerbaRoutes from './routes/yerbasRoutes.js';
 import authRoutes  from './routes/authRoutes.js';
 import recommendationsRoutes from './routes/recommendationsRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import newsletterRoutes from './routes/newsletterRoutes.js';
 
 // Montar rutas
 app.use('/users',  userRoutes);
@@ -27,6 +28,7 @@ app.use('/yerbas', yerbaRoutes);
 app.use('/auth',   authRoutes);
 app.use('/api',    recommendationsRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api',    newsletterRoutes);
 
 // STATIC  ─ sirve las imágenes que realmente viven en public/yerbas
 app.use(

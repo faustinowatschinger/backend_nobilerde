@@ -178,8 +178,12 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
       });
     }
 
-    // Importar el modelo de yerbas
+    // Importar el modelo de yerbas y el servicio de OpenAI
     const { Yerba } = await import('../config/yerbasModel.js');
+
+    // Deducir el tipo comercial basado en las características
+    const tipoDeducido = openaiService.deducirTipo(characteristics);
+    console.log('🤖 Tipo deducido:', tipoDeducido);
 
     // Construir query de búsqueda basado en las nuevas características
     let query = {};
@@ -187,11 +191,6 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
     // Filtrar por marca específica si se menciona
     if (characteristics.marca) {
       query.marca = characteristics.marca;
-    }
-
-    // Filtrar por tipo de yerba
-    if (characteristics.tipo) {
-      query.tipo = characteristics.tipo;
     }
 
     // Filtrar por contenido de palo
@@ -234,7 +233,19 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
       query.produccion = characteristics.produccion;
     }
 
+    // Si el tipo deducido es "Compuesta" y se mencionan composiciones específicas en el prompt original
+    // buscar yerbas que contengan esas composiciones
+    if (tipoDeducido === 'Compuesta' && characteristics.composicionBuscada) {
+      // Si hay composiciones específicas mencionadas, filtrar por ellas
+      if (Array.isArray(characteristics.composicionBuscada)) {
+        query.composicion = { $in: characteristics.composicionBuscada };
+      } else {
+        query.composicion = characteristics.composicionBuscada;
+      }
+    }
+
     console.log('🔍 Query construido para búsqueda de yerbas:', query);
+    console.log('🔍 Tipo deducido para filtrado:', tipoDeducido);
 
     // Buscar yerbas que coincidan
     const yerbas = await Yerba.find(query).limit(10).sort({ puntuacion: -1 });
@@ -245,20 +256,7 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
       
       // Estrategia de búsqueda flexible por orden de prioridad
       const flexibleSearches = [
-        // 1. Por tipo y país (más probable que haya coincidencias)
-        { 
-          query: {
-            ...(characteristics.tipo && { tipo: characteristics.tipo }),
-            ...(characteristics.pais && { pais: characteristics.pais })
-          },
-          name: 'tipo + país'
-        },
-        // 2. Solo por tipo (muy amplio)
-        {
-          query: characteristics.tipo ? { tipo: characteristics.tipo } : {},
-          name: 'solo tipo'
-        },
-        // 3. Por país y origen
+        // 1. Por país y origen (más específico)
         {
           query: {
             ...(characteristics.pais && { pais: characteristics.pais }),
@@ -266,7 +264,7 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
           },
           name: 'país + origen'
         },
-        // 4. Por contenido de palo y tipo de secado
+        // 2. Por contenido de palo y tipo de secado
         {
           query: {
             ...(characteristics.containsPalo !== undefined && { containsPalo: characteristics.containsPalo === 'Sí' }),
@@ -274,10 +272,30 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
           },
           name: 'palo + secado'
         },
+        // 3. Por país y contenido de palo
+        {
+          query: {
+            ...(characteristics.pais && { pais: characteristics.pais }),
+            ...(characteristics.containsPalo !== undefined && { containsPalo: characteristics.containsPalo === 'Sí' })
+          },
+          name: 'país + palo'
+        },
+        // 4. Si es compuesta, buscar por composición únicamente
+        ...(tipoDeducido === 'Compuesta' && characteristics.composicionBuscada ? [{
+          query: Array.isArray(characteristics.composicionBuscada) 
+            ? { composicion: { $in: characteristics.composicionBuscada } }
+            : { composicion: characteristics.composicionBuscada },
+          name: 'composición específica'
+        }] : []),
         // 5. Solo por país
         {
           query: characteristics.pais ? { pais: characteristics.pais } : {},
           name: 'solo país'
+        },
+        // 6. Solo por origen
+        {
+          query: characteristics.origen ? { origen: characteristics.origen } : {},
+          name: 'solo origen'
         }
       ];
 
@@ -311,6 +329,7 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
           recommendations: flexibleResults,
           matchType: 'flexible',
           matchCriteria: characteristics,
+          deducedType: tipoDeducido,
           flexibleStrategy: usedStrategy,
           originalQuery: query,
           totalFound: flexibleResults.length,
@@ -327,6 +346,7 @@ router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res
         recommendations: yerbas,
         matchType: 'exact',
         matchCriteria: characteristics,
+        deducedType: tipoDeducido,
         query,
         totalFound: yerbas.length
       }

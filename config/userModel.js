@@ -67,6 +67,7 @@ const UserSchema = new Schema({
   shelf:            { type: [ShelfItemSchema], default: [] },
   emailVerified:    { type: Boolean, default: false },
   emailVerifiedAt:  { type: Date },
+  upgradedAt:       { type: Date }, // Fecha de actualización a Pro
   createdAt:        { type: Date, default: Date.now }
 }, { timestamps: false });
 UserSchema.pre('findOneAndDelete', async function (next) {

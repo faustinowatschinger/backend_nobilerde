@@ -3,7 +3,7 @@ import {check, validationResult} from 'express-validator'
 import jwt from 'jsonwebtoken'
 import User from '../config/userModel.js';
 import { secret, expiresIn } from '../config/auth.config.js';
-import { createAndSendVerificationCode, verifyEmailCode, resendVerificationCode } from '../controllers/emailController.js';
+import { createAndSendVerificationCode, verifyEmailCode, verifyCodeInternal, resendVerificationCode } from '../controllers/emailController.js';
 
 const router = express.Router();
 
@@ -181,5 +181,183 @@ router.post(
 // Rutas de verificación de email
 router.post('/verify-email', verifyEmailCode);
 router.post('/resend-verification', resendVerificationCode);
+
+// Solicitar restablecimiento de contraseña
+router.post('/forgot-password', 
+  [
+    check('email').isEmail().withMessage('Email inválido')
+  ],
+  async (req, res, next) => {
+    try {
+      console.log('🔧 Solicitud de recuperación de contraseña:', req.body);
+      
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        console.log('❌ Error de validación:', errors.array()[0].msg);
+        return res.status(400).json({ 
+          success: false,
+          message: errors.array()[0].msg 
+        });
+      }
+
+      const { email } = req.body;
+      console.log('📧 Buscando usuario con email:', email);
+
+      // Verificar si el usuario existe
+      const user = await User.findOne({ email });
+      if (!user) {
+        console.log('❌ Usuario no encontrado:', email);
+        return res.status(404).json({ 
+          success: false,
+          message: 'No existe una cuenta asociada a este email' 
+        });
+      }
+
+      console.log('✅ Usuario encontrado, enviando código...');
+      // Crear y enviar código de verificación
+      const result = await createAndSendVerificationCode(email, 'password_reset');
+      
+      if (!result.success) {
+        console.log('❌ Error al crear/enviar código:', result.message);
+        return res.status(500).json({
+          success: false,
+          message: result.message || 'Error al enviar el código de verificación'
+        });
+      }
+
+      console.log('✅ Código enviado exitosamente');
+      res.json({ 
+        success: true,
+        message: 'Código de verificación enviado a tu email' 
+      });
+    } catch (err) {
+      console.error('❌ Error en forgot-password:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+);
+
+// Restablecer contraseña
+router.post('/reset-password',
+  [
+    check('email').isEmail().withMessage('Email inválido'),
+    check('code').isLength({ min: 6, max: 6 }).withMessage('Código debe tener 6 dígitos'),
+    check('newPassword').isLength({ min: 6 }).withMessage('Contraseña debe tener al menos 6 caracteres')
+  ],
+  async (req, res, next) => {
+    try {
+      console.log('🔧 Solicitud de restablecimiento de contraseña:', { email: req.body.email, code: req.body.code });
+      
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        console.log('❌ Error de validación:', errors.array()[0].msg);
+        return res.status(400).json({ 
+          success: false,
+          message: errors.array()[0].msg 
+        });
+      }
+
+      const { email, code, newPassword } = req.body;
+
+      // Verificar el código usando la función auxiliar
+      console.log('🔍 Verificando código...');
+      const isValidCode = await verifyCodeInternal(email, code, 'password_reset');
+
+      if (!isValidCode.success) {
+        console.log('❌ Código inválido:', isValidCode.message);
+        return res.status(400).json({ 
+          success: false,
+          message: isValidCode.message || 'Código de verificación inválido o expirado' 
+        });
+      }
+
+      console.log('✅ Código válido, actualizando contraseña...');
+      // Actualizar la contraseña
+      const user = await User.findOne({ email });
+      if (!user) {
+        console.log('❌ Usuario no encontrado en actualización:', email);
+        return res.status(404).json({ 
+          success: false,
+          message: 'Usuario no encontrado' 
+        });
+      }
+
+      user.password = newPassword; // El modelo se encarga del hash
+      await user.save();
+
+      console.log('✅ Contraseña actualizada exitosamente');
+      res.json({ 
+        success: true,
+        message: 'Contraseña actualizada exitosamente' 
+      });
+    } catch (err) {
+      console.error('❌ Error en reset-password:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+);
+
+// Reenviar código de restablecimiento
+router.post('/resend-reset-code',
+  [
+    check('email').isEmail().withMessage('Email inválido')
+  ],
+  async (req, res, next) => {
+    try {
+      console.log('🔧 Solicitud de reenvío de código:', req.body);
+      
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        console.log('❌ Error de validación:', errors.array()[0].msg);
+        return res.status(400).json({ 
+          success: false,
+          message: errors.array()[0].msg 
+        });
+      }
+
+      const { email } = req.body;
+
+      // Verificar que el usuario existe
+      const user = await User.findOne({ email });
+      if (!user) {
+        console.log('❌ Usuario no encontrado:', email);
+        return res.status(404).json({ 
+          success: false,
+          message: 'No existe una cuenta asociada a este email' 
+        });
+      }
+
+      // Reenviar código
+      console.log('📧 Reenviando código...');
+      const result = await createAndSendVerificationCode(email, 'password_reset');
+      
+      if (!result.success) {
+        console.log('❌ Error al reenviar código:', result.message);
+        return res.status(500).json({
+          success: false,
+          message: result.message || 'Error al reenviar el código'
+        });
+      }
+
+      console.log('✅ Código reenviado exitosamente');
+      res.json({ 
+        success: true,
+        message: 'Código reenviado exitosamente' 
+      });
+    } catch (err) {
+      console.error('❌ Error en resend-reset-code:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+);
 
 export default router;

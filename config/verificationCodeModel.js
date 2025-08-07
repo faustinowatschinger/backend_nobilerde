@@ -13,6 +13,11 @@ const VerificationCodeSchema = new Schema({
     required: true,
     length: 6
   },
+  type: {
+    type: String,
+    enum: ['email_verification', 'password_reset'],
+    default: 'email_verification'
+  },
   expiresAt: {
     type: Date,
     required: true,
@@ -33,7 +38,7 @@ const VerificationCodeSchema = new Schema({
 });
 
 // Índices para optimización
-VerificationCodeSchema.index({ email: 1 });
+VerificationCodeSchema.index({ email: 1, type: 1 });
 VerificationCodeSchema.index({ code: 1 });
 VerificationCodeSchema.index({ expiresAt: 1 });
 

@@ -1,0 +1,173 @@
+{
+  "secado": [
+    {
+      "Sistema": "Barbacuá",
+      "Procedimiento": "Hojas sobre zarzo; 10-24 h de calor + humo de leña.",
+      "Efecto sensorial principal": "Notas ahumadas, color ambar-rojizo, cuerpo denso por incorporación de compuestos fenólicos volátiles."
+    },
+    {
+      "Sistema": "A cintas / Túnel rotativo (“sapecado” + flujo de aire)",
+      "Procedimiento": "Zapecado rápido (≈30 s a 600 °C) + túnel continuo de aire caliente.",
+      "Efecto sensorial principal": "Perfil más “limpio”: menos humo, color verde vivo; si la caldera es indirecta se minimizan hidrocarburos PAH."
+    },
+    {
+      "Sistema": "Carijó (indirecto a leña)",
+      "Procedimiento": "Fuego lateral; las hojas no tocan el humo directo.",
+      "Efecto sensorial principal": "Aroma levemente tostado-dulce; método artesanal aún común en sur de Brasil."
+    },
+    {
+      "Sistema": "Secado indirecto moderno (caldera externa)",
+      "Procedimiento": "Aire caliente sin combustión en cámara.",
+      "Efecto sensorial principal": "Sabor delicado, baja astringencia; elegido por marcas “libre de humo”."
+    }
+  ],
+  "variable_clave": [
+    {
+      "Variable clave": "Hoja pura (%)",
+      "Yerbas extra-finas sin palo": "≥ 90 % hoja, ≤ 10 % palo",
+      "Yerbas con palo y corte medio": "65–70 % hoja, ≤ 35 % palo"
+    },
+    {
+      "Variable clave": "Densidad (g/cm³) en el mate",
+      "Yerbas extra-finas sin palo": "Mayor: 40-50 g por calabaza estilo uruguayo",
+      "Yerbas con palo y corte medio": "Menor: 25-30 g en un mate estándar"
+    },
+    {
+      "Variable clave": "Cinética de extracción",
+      "Yerbas extra-finas sin palo": "Polvo < 500 µm libera sólidos muy rápido, pero se moja por capas",
+      "Yerbas con palo y corte medio": "Partícula media + tallos de baja solubilidad → extracción más lenta"
+    },
+    {
+      "Variable clave": "Edad / estacionamiento",
+      "Yerbas extra-finas sin palo": "4-6 meses controlados",
+      "Yerbas con palo y corte medio": "9-12 meses en blends masivos"
+    }
+  ],
+  "molienda_impacto": [
+    {
+      "Grado": "Extra fina (≤ 0,5 mm)",
+      "Corte típico": "Uruguay/Brasil sin palo",
+      "Impacto": "Espuma abundante, pico de sabor inicial alto; rinde mucho si se compacta y se moja en etapas."
+    },
+    {
+      "Grado": "Media-fina (≈1 mm)",
+      "Corte típico": "Blends argentinos",
+      "Impacto": "Equilibrio entre intensidad y drenaje; ideal para mates “redondos”."
+    },
+    {
+      "Grado": "Gruesa / canchada (≥ 3 mm)",
+      "Corte típico": "Yerbas premium barbacuá",
+      "Impacto": "Flujo lento, amargor bajo; cebadas largas pero menos espuma."
+    }
+  ],
+  "estacionamiento": [
+    {
+      "Modalidad": "Natural (pilas aireadas)",
+      "Tiempo": "9-24 meses",
+      "Cambios principales": "Oxidación de clorofilas ↓ astringencia; notas dulces y “pan tostado”."
+    },
+    {
+      "Modalidad": "Acelerado / controlado",
+      "Tiempo": "30-90 días",
+      "Cambios principales": "Perfil más verde y cítrico; acidez perceptible."
+    },
+    {
+      "Modalidad": "> 24 meses (“Selección” / “Reserva”)",
+      "Tiempo": "2-3 años",
+      "Cambios principales": "Gran complejidad aromática y rendimiento sobresaliente."
+    }
+  ],
+  "tipos_comerciales": [
+    {
+      "Tipo": "Tradicional con palo",
+      "Diferencial": "Corte medio, 65-70 % hoja",
+      "Experiencia": "Mate equilibrado, fácil de cebar."
+    },
+    {
+      "Tipo": "Suave / Serena",
+      "Diferencial": "Molienda gruesa + estacionamiento largo",
+      "Experiencia": "Bajo amargor, ideal estómagos sensibles."
+    },
+    {
+      "Tipo": "Despalada / Sin palo",
+      "Diferencial": "≥ 90 % hoja, extra-fina",
+      "Experiencia": "Golpe de cafeína, mucha espuma, rinde si se arma “montañita”."
+    },
+    {
+      "Tipo": "Barbacuá",
+      "Diferencial": "Secado lento con humo",
+      "Experiencia": "Toques ahumados, cuerpo denso."
+    },
+    {
+      "Tipo": "Compuesta (hierbas)",
+      "Diferencial": "Mezcla funcional",
+      "Experiencia": "Refresca, digestiva o relajante según mezcla."
+    }
+  ],
+  "produccion": [
+    {
+      "Enfoque": "Industrial",
+      "Características": "Secado continuo, estacionamiento breve",
+      "Resultado": "Perfil verde, acidez media; calidad homogénea."
+    },
+    {
+      "Enfoque": "Artesanal / Barbacuá",
+      "Características": "Lotes pequeños, leña nativa",
+      "Resultado": "Sabor redondo, notas ahumadas dulces."
+    },
+    {
+      "Enfoque": "Orgánico / Agroecológico",
+      "Características": "Sin agroquímicos, secado indirecto",
+      "Resultado": "Sabor limpio; valor agregado ambiental."
+    }
+  ],
+  "hierbas_y_añadidos": [
+    {
+      "Ingrediente": "Menta / Hierbabuena",
+      "Nota aromática": "Mentolada, fresca",
+      "Propósito tradicional": "Digestiva, descongestiva."
+    },
+    {
+      "Ingrediente": "Boldo",
+      "Nota aromática": "Herbal-amargo",
+      "Propósito tradicional": "Colagogo, ayuda hepática."
+    },
+    {
+      "Ingrediente": "Peperina / Poleo",
+      "Nota aromática": "Fresco cítrico",
+      "Propósito tradicional": "Carminativo, anti-espasmos."
+    },
+    {
+      "Ingrediente": "Manzanilla / Tilo / Melissa",
+      "Nota aromática": "Floral-dulce",
+      "Propósito tradicional": "Relajante suave, disminuye acidez."
+    },
+    {
+      "Ingrediente": "Jengibre / Canela / Clavo",
+      "Nota aromática": "Picante cálido",
+      "Propósito tradicional": "Termogénico, antioxidante, ideal en invierno."
+    },
+    {
+      "Ingrediente": "Cáscara de naranja / Limón",
+      "Nota aromática": "Cítrico vivo",
+      "Propósito tradicional": "Aporta frescor y dulzor natural; popular en tereré."
+    }
+  ],
+  "origen_geografico": [
+    {
+      "Región": "Misiones–Corrientes (AR)",
+      "Rasgos agronómicos": "Suelos lateríticos ricos en hierro",
+      "Perfil típico": "Mate dulce, equilibrado, color verde-amarillento."
+    },
+    {
+      "Región": "Sur de Brasil (RS, SC, PR)",
+      "Rasgos agronómicos": "Cosecha verde, molienda fina",
+      "Perfil típico": "Infusión herbácea, muy espumosa y de alta cafeína."
+    },
+    {
+      "Región": "Paraguay (Itapúa, Alto Paraná)",
+      "Rasgos agronómicos": "Clima más cálido; tereré",
+      "Perfil típico": "Yerbas fuertes, astringentes, mezcla frecuente con hierbas cítricas."
+    }
+  ]
+}
