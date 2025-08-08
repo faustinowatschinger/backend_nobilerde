@@ -1,6 +1,7 @@
 import express from 'express';
 import openaiService from '../services/openaiService.js';
 import { authenticateToken, requireRole } from '../auth/middleware/authMiddleware.js';
+import EventTracker from '../middleware/eventTracker.js';
 
 const router = express.Router();
 
@@ -8,10 +9,10 @@ const router = express.Router();
  * POST /api/ai/interpret-yerba
  * Interpretar prompt del usuario y convertirlo a características de yerba
  */
-router.post('/interpret-yerba', authenticateToken, requireRole('pro'), async (req, res) => {
+router.post('/interpret-yerba', authenticateToken, async (req, res) => {
   try {
     const { prompt } = req.body;
-    const userRole = req.userRole || 'basic';
+    const userRole = req.userRole || 'user';
 
     // Validar que el prompt esté presente
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -42,6 +43,16 @@ router.post('/interpret-yerba', authenticateToken, requireRole('pro'), async (re
       tokensUsed: interpretation.usage.totalTokens
     });
 
+    // Track AI interaction event
+    EventTracker.trackAIInteraction(
+      req.userId, 
+      prompt, 
+      interpretation.interpretation, 
+      0 // No recommendations count at this stage
+    ).catch(error => {
+      console.error('Error tracking AI interaction:', error);
+    });
+
     res.json({
       success: true,
       data: interpretation,
@@ -55,13 +66,6 @@ router.post('/interpret-yerba', authenticateToken, requireRole('pro'), async (re
     console.error('❌ Error en /ai/interpret-yerba:', error);
     
     // Manejar errores específicos de OpenAI
-    if (error.message.includes('usuarios PRO')) {
-      return res.status(403).json({
-        success: false,
-        error: error.message
-      });
-    }
-
     if (error.message.includes('API key')) {
       return res.status(503).json({
         success: false,
@@ -89,7 +93,7 @@ router.post('/interpret-yerba', authenticateToken, requireRole('pro'), async (re
  * GET /api/ai/examples
  * Obtener ejemplos de prompts para ayudar a los usuarios
  */
-router.get('/examples', authenticateToken, requireRole('pro'), (req, res) => {
+router.get('/examples', authenticateToken, (req, res) => {
   try {
     const examples = openaiService.getExamplePrompts();
     
@@ -138,7 +142,7 @@ router.get('/status', authenticateToken, (req, res) => {
   
   try {
     const status = openaiService.getUsageStats();
-    const userRole = req.userRole || 'basic';
+    const userRole = req.userRole || 'user';
     
     console.log('🔍 /ai/status - userRole final:', userRole);
     
@@ -147,7 +151,7 @@ router.get('/status', authenticateToken, (req, res) => {
       data: {
         serviceAvailable: status.serviceEnabled,
         userRole,
-        hasAccess: userRole === 'pro',
+        hasAccess: true, // Todos los usuarios tienen acceso
         systemVersion: status.systemPromptVersion,
         lastRequest: status.lastRequest
       }
@@ -166,10 +170,10 @@ router.get('/status', authenticateToken, (req, res) => {
  * POST /api/ai/recommend
  * Buscar yerbas basado en las características interpretadas por IA
  */
-router.post('/recommend', authenticateToken, requireRole('pro'), async (req, res) => {
+router.post('/recommend', authenticateToken, async (req, res) => {
   try {
     const { characteristics } = req.body;
-    const userRole = req.userRole || 'basic';
+    const userRole = req.userRole || 'user';
 
     if (!characteristics) {
       return res.status(400).json({

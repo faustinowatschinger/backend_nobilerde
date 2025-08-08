@@ -208,44 +208,4 @@ router.delete('/:id/shelf/:yerbaId', async (req, res, next) => {
   }
 });
 
-// POST /users/upgrade-to-pro - Actualizar usuario a plan Pro
-router.post('/upgrade-to-pro', async (req, res, next) => {
-  try {
-    const userId = req.userId;
-    
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    // Verificar si ya es Pro o Admin
-    if (user.role === 'pro' || user.role === 'admin') {
-      return res.status(400).json({ error: 'El usuario ya tiene un plan Pro o superior' });
-    }
-
-    // Actualizar a Pro
-    user.role = 'pro';
-    user.upgradedAt = new Date();
-    await user.save();
-
-    console.log(`✅ Usuario ${user.nombre} (${user.email}) actualizado a Plan Pro`);
-
-    res.json({
-      success: true,
-      message: 'Plan actualizado a Pro exitosamente',
-      user: {
-        id: user._id,
-        nombre: user.nombre,
-        email: user.email,
-        role: user.role,
-        upgradedAt: user.upgradedAt
-      }
-    });
-
-  } catch (err) {
-    console.error('❌ Error actualizando plan:', err);
-    next(err);
-  }
-});
-
 export default router;

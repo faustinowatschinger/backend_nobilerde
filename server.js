@@ -21,6 +21,23 @@ import authRoutes  from './routes/authRoutes.js';
 import recommendationsRoutes from './routes/recommendationsRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import newsletterRoutes from './routes/newsletterRoutes.js';
+import metricsRoutes from './routes/metricsRoutes.js';
+
+// Importar sistemas de eventos y métricas
+import './config/eventModel.js'; // Inicializar modelo de eventos
+import './jobs/scheduleMetrics.js'; // Inicializar programador de métricas
+import EventTracker from './middleware/eventTracker.js'; // Middleware de tracking
+
+// Aplicar middleware de tracking automático a todas las rutas de API
+app.use('/api', EventTracker.autoTrack());
+app.use('/users', EventTracker.autoTrack());
+app.use('/yerbas', EventTracker.autoTrack());
+app.use('/auth', EventTracker.autoTrack());
+
+// --- Test route for debugging
+app.get('/test', (req, res) => {
+  res.json({ message: 'Server is working', timestamp: new Date() });
+});
 
 // Montar rutas
 app.use('/users',  userRoutes);
@@ -29,6 +46,16 @@ app.use('/auth',   authRoutes);
 app.use('/api',    recommendationsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api',    newsletterRoutes);
+app.use('/api/metrics', metricsRoutes);
+
+console.log('📋 Routes mounted:');
+console.log('  - /users');
+console.log('  - /yerbas');
+console.log('  - /auth');
+console.log('  - /api (recommendations)');
+console.log('  - /api/ai');
+console.log('  - /api (newsletter)');
+console.log('  - /api/metrics');
 
 // STATIC  ─ sirve las imágenes que realmente viven en public/yerbas
 app.use(

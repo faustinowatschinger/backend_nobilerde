@@ -4,6 +4,7 @@ const router = express.Router();
 import { Yerba } from '../config/yerbasModel.js';
 import { uploadYerba } from '../config/multerYerbas.js';
 import User from '../config/userModel.js';
+import EventTracker from '../middleware/eventTracker.js';
 
 // Middleware para convertir URLs relativas a absolutas
 const convertImageUrls = (req, res, next) => {
@@ -113,6 +114,22 @@ router.get('/', async (req, res, next) => {
       return yerbaObj;
     });
 
+    // Track search event si hay usuario autenticado
+    if (req.userId && (search || Object.keys(filter).length > 0)) {
+      const appliedFilters = [];
+      if (origen) appliedFilters.push(`origen:${origen}`);
+      if (tipo) appliedFilters.push(`tipo:${tipo}`);
+      if (marca) appliedFilters.push(`marca:${marca}`);
+      if (containsPalo) appliedFilters.push(`containsPalo:${containsPalo}`);
+      if (leafCut) appliedFilters.push(`leafCut:${leafCut}`);
+      if (secado) appliedFilters.push(`secado:${secado}`);
+      if (produccion) appliedFilters.push(`produccion:${produccion}`);
+      
+      EventTracker.trackSearch(req.userId, search, appliedFilters, total).catch(error => {
+        console.error('Error tracking search:', error);
+      });
+    }
+
     res.json({
       data: dataWithUrls,
       meta: { 
@@ -138,6 +155,20 @@ router.get('/:id', async (req, res, next) => {
         select: 'username nombre avatarURL'
       });
     if (!yerba) return res.status(404).json({ error: 'Yerba no encontrada' });
+    
+    // Track view event si hay usuario autenticado
+    if (req.userId) {
+      EventTracker.trackEvent(req.userId, 'view_yerba', {
+        yerba: req.params.id,
+        sessionId: req.sessionID,
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip
+      }).catch(error => {
+        console.error('Error tracking view_yerba:', error);
+        // No fallar la request por error de tracking
+      });
+    }
+    
     res.json(yerba);
   } catch (err) {
     next(err);

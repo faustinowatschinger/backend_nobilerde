@@ -20,9 +20,6 @@ usersConn.on('error', err => {
 yerbasConn.on('error', err => {
   console.error('❌ Error de conexión a Yerbas DB:', err);
 });
-pricesConn.on('error', err => {
-  console.error('❌ Error de conexión a Precios DB:', err);
-});
 
 // Logueo al conectar
 usersConn.once('open', () => console.log('✅ Usuarios DB conectada'));

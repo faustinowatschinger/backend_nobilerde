@@ -61,13 +61,12 @@ const UserSchema = new Schema({
   tipoMatero: { type: String },
   tipoMate: { type: String },
   termosDia:        { type: Number, required: true },
-  role:             { type: String, enum: ['user', 'pro', 'admin'], default: 'user' },
+  role:             { type: String, enum: ['user', 'admin'], default: 'user' },
   preferences:      { type: [String], default: [] },
   avatarURL: { type: String, default: '' },
   shelf:            { type: [ShelfItemSchema], default: [] },
   emailVerified:    { type: Boolean, default: false },
   emailVerifiedAt:  { type: Date },
-  upgradedAt:       { type: Date }, // Fecha de actualización a Pro
   createdAt:        { type: Date, default: Date.now }
 }, { timestamps: false });
 UserSchema.pre('findOneAndDelete', async function (next) {
