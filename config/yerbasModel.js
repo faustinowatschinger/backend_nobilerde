@@ -1,11 +1,24 @@
 // backend/config/yerbasModel.js
 import { yerbasConn } from './multiDB.js';
 import mongoose, { Schema } from 'mongoose';
+// Esquema para respuestas a reviews (con soporte para respuestas anidadas)
+const ReplySchema = new Schema({
+  _id:      { type: Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
+  user:     { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  comment:  { type: String, required: true },
+  likes:    { type: [{ type: Schema.Types.ObjectId, ref: 'User' }], default: [] },
+  parentReply: { type: Schema.Types.ObjectId, default: null }, // Para respuestas anidadas
+  createdAt:{ type: Date, default: Date.now }
+});
+
 const ReviewSchema = new Schema({
   _id:      { type: Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
   user:     { type: Schema.Types.ObjectId, ref: 'User', required: true },
   score:    { type: Number, min: 1, max: 5, required: true },
   comment:  { type: String, required: false }, // Cambiado a false para permitir reviews sin comentario
+  notes:    { type: [String], default: [] }, // Notas sensoriales del vocabulario controlado
+  likes:    { type: [{ type: Schema.Types.ObjectId, ref: 'User' }], default: [] },
+  replies:  { type: [ReplySchema], default: [] },
   createdAt:{ type: Date, default: Date.now }
 });
 const YerbaSchema = new Schema({

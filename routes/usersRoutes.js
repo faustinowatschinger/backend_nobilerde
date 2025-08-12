@@ -124,7 +124,7 @@ router.post('/:id/avatar', uploadAvatar.single('avatar'), async (req, res, next)
 // POST /users/:id/shelf
 router.post('/:id/shelf', async (req, res, next) => {
   try {
-    const { yerba, status, score, comment } = req.body;
+    const { yerba, status, score, comment, notes } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
@@ -138,13 +138,42 @@ router.post('/:id/shelf', async (req, res, next) => {
         .json({ error: 'Esa yerba ya está en tu estantería' });
     }
 
-    // 2. Si no existía, la agrego
-    user.shelf.push({ yerba, status, score, comment });
-    await user.save();
-    await Yerba.findByIdAndUpdate( yerba, {
-      $push: { reviews: { user: user._id, score, comment } }
+    let reviewId = null;
+
+    // 2. Si tiene score/comment/notes, crear review en la yerba
+    if (status === 'probada' && (score || comment || (notes && notes.length > 0))) {
+      const yerbaDoc = await Yerba.findById(yerba);
+      if (yerbaDoc) {
+        const newReview = {
+          user: user._id,
+          score: score || 3,
+          comment: comment || '',
+          notes: notes || [],
+          likes: [],
+          replies: [],
+          createdAt: new Date()
+        };
+        
+        yerbaDoc.reviews.push(newReview);
+        await yerbaDoc.save();
+        
+        // Obtener el ID del review recién creado
+        reviewId = yerbaDoc.reviews[yerbaDoc.reviews.length - 1]._id;
+      }
+    }
+
+    // 3. Agregar a la estantería del usuario
+    user.shelf.push({ 
+      yerba, 
+      status, 
+      score, 
+      comment, 
+      notes: notes || [],
+      reviewId 
     });
-    // 3. Vuelvo a poblar para devolver el objeto completo
+    await user.save();
+
+    // 4. Vuelvo a poblar para devolver el objeto completo
     await user.populate({
       path: 'shelf.yerba',
       model: yerbasConn.model('Yerba')
@@ -160,31 +189,62 @@ router.post('/:id/shelf', async (req, res, next) => {
 // PATCH /users/:id/shelf/:yerbaId
 router.patch('/:id/shelf/:yerbaId', async (req, res, next) => {
   try {
-    const { status, score, comment } = req.body;
+    const { status, score, comment, notes } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     const item = user.shelf.find(i => i.yerba.toString() === req.params.yerbaId);
     if (!item) return res.status(404).json({ error: 'Yerba no encontrada en la estantería' });
 
-    if (status)  item.status  = status;
-    if (score !== undefined)  item.score   = score;
-    if (comment !== undefined) item.comment = comment;    await user.save();
+    // Actualizar item en shelf
+    if (status) item.status = status;
+    if (score !== undefined) item.score = score;
+    if (comment !== undefined) item.comment = comment;
+    if (notes !== undefined) item.notes = notes;
+
+    await user.save();
     await user.populate({
       path: 'shelf.yerba',
       model: yerbasConn.model('Yerba')
     });
+
+    // Actualizar o crear review en la yerba
     const yerbaDoc = await Yerba.findById(req.params.yerbaId);
-if (yerbaDoc) {
-  const rev = yerbaDoc.reviews.find(r =>
-    r.user.toString() === req.params.id
-  );
-  if (rev) {
-    if (score  !== undefined) rev.score   = score;
-    if (comment!== undefined) rev.comment = comment;
-    await yerbaDoc.save();
-  }
-}
+    if (yerbaDoc) {
+      let review = null;
+      
+      // Buscar review existente
+      if (item.reviewId) {
+        review = yerbaDoc.reviews.id(item.reviewId);
+      } else {
+        // Buscar por usuario (para compatibility con datos existentes)
+        review = yerbaDoc.reviews.find(r => r.user.toString() === req.params.id);
+      }
+
+      if (review) {
+        // Actualizar review existente
+        if (score !== undefined) review.score = score;
+        if (comment !== undefined) review.comment = comment;
+        if (notes !== undefined) review.notes = notes;
+      } else if (status === 'probada' && (score || comment || (notes && notes.length > 0))) {
+        // Crear nuevo review
+        const newReview = {
+          user: req.params.id,
+          score: score || 3,
+          comment: comment || '',
+          notes: notes || [],
+          likes: [],
+          replies: [],
+          createdAt: new Date()
+        };
+        
+        yerbaDoc.reviews.push(newReview);
+        item.reviewId = yerbaDoc.reviews[yerbaDoc.reviews.length - 1]._id;
+      }
+      
+      await yerbaDoc.save();
+    }
+
     res.json(item);
   } catch (err) {
     next(err);

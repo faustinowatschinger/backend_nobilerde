@@ -45,7 +45,9 @@ const ShelfItemSchema = new Schema({
   status:  { type: String, enum: ['por probar', 'probada'], default: 'por probar' },
   score:   { type: Number, min: 1, max: 5 },
   comment: { type: String },
-  addedAt: { type: Date, default: Date.now }
+  notes:   { type: [String], default: [] }, // Notas sensoriales del vocabulario controlado
+  addedAt: { type: Date, default: Date.now },
+  reviewId: { type: Schema.Types.ObjectId } // Referencia al review en la yerba (si existe)
 }, { _id: false });
 
 // Esquema Usuario
