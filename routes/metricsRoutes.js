@@ -495,14 +495,15 @@ router.get('/trends-comparison', async (req, res) => {
       switch (metric) {
         case 'discoveryRate':
         case 'descubrimiento':
-          // Para discovery rate, usar el valor tal como viene (ya está en la escala correcta)
-          const discoveryValue = parseFloat(overviewData.discoveryRate || 0);
-          console.log(`🔍 Discovery rate para métrica ${metric}:`, { 
-            rawValue: overviewData.discoveryRate, 
-            parsedValue: discoveryValue,
-            finalValue: discoveryValue
+          // Para descubrimiento, usar el conteo de eventos de descubrimiento específicos
+          // que está almacenado en overviewData.discoveryEvents (será agregado más adelante)
+          const discoveryEvents = overviewData.discoveryEvents || 0;
+          console.log(`🔍 Discovery events para métrica ${metric}:`, { 
+            discoveryEvents,
+            discoveryRate: overviewData.discoveryRate,
+            finalValue: discoveryEvents
           });
-          return discoveryValue;
+          return discoveryEvents;
         case 'volumen':
           // Para volumen, usar la actividad temporal específica filtrada por entidad
           const temporalData = overviewData.temporalActivity?.data || [];
@@ -831,6 +832,403 @@ router.get('/debug-entity-data', async (req, res) => {
   } catch (error) {
     console.error('Error en debug-entity-data:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/metrics/debug-frontend-issue
+ * Endpoint temporal para diagnosticar específicamente por qué el frontend 
+ * muestra que no hay datos para otras entidades
+ */
+router.get('/debug-frontend-issue', async (req, res) => {
+  try {
+    console.log('🔍 DEBUG-FRONTEND - Request completo:', {
+      url: req.url,
+      query: req.query,
+      method: req.method
+    });
+
+    // Obtener todas las entidades disponibles para diferentes tipos
+    const entityTypes = ['tipo', 'marca', 'pais', 'establecimiento', 'tipoEstacionamiento'];
+    const entitiesData = {};
+    
+    for (const entityType of entityTypes) {
+      try {
+        const entities = await metricsService.getAvailableEntities(entityType);
+        entitiesData[entityType] = entities;
+      } catch (error) {
+        entitiesData[entityType] = { error: error.message };
+      }
+    }
+
+    // Probar trends-comparison para diferentes combinaciones
+    const testCases = [
+      { metric: 'volumen', entityType: 'tipo' },
+      { metric: 'descubrimiento', entityType: 'tipo' },
+      { metric: 'volumen', entityType: 'pais' },
+      { metric: 'descubrimiento', entityType: 'pais' },
+      { metric: 'volumen', entityType: 'establecimiento' },
+      { metric: 'descubrimiento', entityType: 'establecimiento' }
+    ];
+
+    const testResults = {};
+    for (const testCase of testCases) {
+      try {
+        const testKey = `${testCase.metric}_${testCase.entityType}`;
+        
+        // Simular llamada igual que trends-comparison
+        const currentEnd = dayjs();
+        const currentStart = currentEnd.subtract(1, 'month');
+        
+        const entityList = await metricsService.getAvailableEntities(testCase.entityType);
+        
+        console.log(`🧪 Testing ${testKey} with entities:`, entityList.slice(0, 2));
+        
+        testResults[testKey] = {
+          entityType: testCase.entityType,
+          metric: testCase.metric,
+          availableEntitiesCount: entityList.length,
+          firstTwoEntities: entityList.slice(0, 2),
+          sampleTest: 'pending'
+        };
+
+        // Hacer una prueba rápida con la primera entidad si existe
+        if (entityList.length > 0) {
+          const firstEntity = entityList[0];
+          const entityFilters = {};
+          
+          // Mapear igual que en trends-comparison
+          switch (testCase.entityType) {
+            case 'tipo':
+              entityFilters.tipoYerba = firstEntity;
+              break;
+            case 'pais':
+              entityFilters.paisProd = firstEntity;
+              break;
+            case 'establecimiento':
+              entityFilters.establecimiento = firstEntity;
+              break;
+            // Agregar más casos según necesidades
+          }
+          
+          const overviewData = await metricsService.getOverviewData({
+            ...entityFilters,
+            startDate: currentStart.format('YYYY-MM-DD'),
+            endDate: currentEnd.format('YYYY-MM-DD')
+          });
+          
+          testResults[testKey].sampleTest = {
+            entity: firstEntity,
+            hasData: !!overviewData,
+            discoveryRate: overviewData.discoveryRate,
+            temporalDataPoints: overviewData.temporalActivity?.data?.length || 0,
+            totalEvents: (overviewData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0)
+          };
+        }
+        
+      } catch (error) {
+        testResults[testCase.metric + '_' + testCase.entityType] = { error: error.message };
+      }
+    }
+
+    const response = {
+      timestamp: new Date().toISOString(),
+      availableEntities: entitiesData,
+      testResults,
+      backendWorking: true,
+      message: 'Debug completo de entidades y tendencias'
+    };
+
+    console.log('📤 DEBUG-FRONTEND - Enviando resultado:', {
+      entityTypesWithData: Object.keys(entitiesData),
+      testCasesRun: Object.keys(testResults).length
+    });
+
+    res.json(response);
+  } catch (error) {
+    console.error('❌ Error en debug-frontend-issue:', error);
+    res.status(500).json({ 
+      error: 'Error en debug',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/metrics/debug-metrics-deep
+ * Debug profundo de las métricas volumen y descubrimiento
+ */
+router.get('/debug-metrics-deep', async (req, res) => {
+  try {
+    const {
+      metric = 'volumen',
+      entityType = 'tipo',
+      entity = 'Tradicional',
+      timePeriod = 'mes'
+    } = req.query;
+
+    console.log('🔍 DEBUG-METRICS-DEEP - Iniciando análisis profundo:', {
+      metric,
+      entityType,
+      entity,
+      timePeriod
+    });
+
+    // Calcular períodos igual que trends-comparison
+    const currentEnd = dayjs();
+    const currentStart = currentEnd.subtract(1, 'month');
+    const previousStart = currentStart.subtract(1, 'month');
+    const previousEnd = currentStart.subtract(1, 'second');
+
+    // Construir filtros para la entidad
+    const entityFilters = {};
+    switch (entityType) {
+      case 'tipo':
+        entityFilters.tipoYerba = entity;
+        break;
+      case 'marca':
+        entityFilters.marca = entity;
+        break;
+      case 'pais':
+      case 'paisProd':
+        entityFilters.paisProd = entity;
+        break;
+      case 'establecimiento':
+        entityFilters.establecimiento = entity;
+        break;
+      // Agregar más casos según necesidad
+    }
+
+    console.log('🎯 Filtros construidos para entidad:', entityFilters);
+
+    // Obtener datos del período actual
+    const currentFilters = {
+      ...entityFilters,
+      startDate: currentStart.format('YYYY-MM-DD'),
+      endDate: currentEnd.format('YYYY-MM-DD')
+    };
+
+    const previousFilters = {
+      ...entityFilters,
+      startDate: previousStart.format('YYYY-MM-DD'),
+      endDate: previousEnd.format('YYYY-MM-DD')
+    };
+
+    console.log('📅 Filtros con fechas:', {
+      current: currentFilters,
+      previous: previousFilters
+    });
+
+    // Llamar getOverviewData para ambos períodos
+    const [currentData, previousData] = await Promise.all([
+      metricsService.getOverviewData(currentFilters),
+      metricsService.getOverviewData(previousFilters)
+    ]);
+
+    console.log('📊 Datos brutos obtenidos:', {
+      current: {
+        discoveryRate: currentData.discoveryRate,
+        temporalActivity: currentData.temporalActivity?.data?.length || 0,
+        temporalEvents: (currentData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0),
+        temporalDataSample: currentData.temporalActivity?.data?.slice(0, 2)
+      },
+      previous: {
+        discoveryRate: previousData.discoveryRate,
+        temporalActivity: previousData.temporalActivity?.data?.length || 0,
+        temporalEvents: (previousData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0),
+        temporalDataSample: previousData.temporalActivity?.data?.slice(0, 2)
+      }
+    });
+
+    // Simular la función getMetricValueFromOverview para ambas métricas
+    const currentVolumen = (currentData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0);
+    const previousVolumen = (previousData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0);
+    
+    const currentDiscovery = parseFloat(currentData.discoveryRate || 0);
+    const previousDiscovery = parseFloat(previousData.discoveryRate || 0);
+
+    // Calcular tendencias
+    const volumenTendency = previousVolumen > 0 
+      ? ((currentVolumen - previousVolumen) / previousVolumen) * 100
+      : (currentVolumen > 0 ? 100 : 0);
+
+    const discoveryTendency = previousDiscovery > 0 
+      ? ((currentDiscovery - previousDiscovery) / previousDiscovery) * 100  
+      : (currentDiscovery > 0 ? 100 : 0);
+
+    const result = {
+      debug: 'deep-metrics-analysis',
+      entity,
+      entityType,
+      periods: {
+        current: { start: currentStart.format('YYYY-MM-DD'), end: currentEnd.format('YYYY-MM-DD') },
+        previous: { start: previousStart.format('YYYY-MM-DD'), end: previousEnd.format('YYYY-MM-DD') }
+      },
+      filters: {
+        entityFilters,
+        currentFilters,
+        previousFilters
+      },
+      metrics: {
+        volumen: {
+          current: currentVolumen,
+          previous: previousVolumen,
+          tendency: Math.round(volumenTendency * 100) / 100,
+          rawTemporalData: currentData.temporalActivity?.data
+        },
+        descubrimiento: {
+          current: currentDiscovery,
+          previous: previousDiscovery,
+          tendency: Math.round(discoveryTendency * 100) / 100,
+          rawDiscoveryData: {
+            currentRate: currentData.discoveryRate,
+            previousRate: previousData.discoveryRate
+          }
+        }
+      },
+      validation: {
+        hasCurrentTemporalData: !!(currentData.temporalActivity?.data?.length),
+        hasPreviousTemporalData: !!(previousData.temporalActivity?.data?.length),
+        currentTemporalDataPoints: currentData.temporalActivity?.data?.length || 0,
+        previousTemporalDataPoints: previousData.temporalActivity?.data?.length || 0,
+        totalCurrentEvents: currentVolumen,
+        totalPreviousEvents: previousVolumen
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('📤 DEBUG-METRICS-DEEP - Resultado final:', {
+      entity,
+      volumenTrend: volumenTendency,
+      discoveryTrend: discoveryTendency,
+      hasData: currentVolumen > 0 || previousVolumen > 0
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error en debug-metrics-deep:', error);
+    res.status(500).json({ 
+      error: 'Error en debug profundo',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/metrics/debug-metrics-new
+ * Debug para verificar la nueva lógica de métricas
+ */
+router.get('/debug-metrics-new', async (req, res) => {
+  try {
+    const {
+      metric = 'descubrimiento',
+      entityType = 'tipo',
+      entity = 'Tradicional'
+    } = req.query;
+
+    console.log('🔍 DEBUG-METRICS-NEW - Verificando nueva lógica:', {
+      metric,
+      entityType,
+      entity
+    });
+
+    // Calcular períodos
+    const currentEnd = dayjs();
+    const currentStart = currentEnd.subtract(1, 'month');
+    const previousStart = currentStart.subtract(1, 'month');
+    const previousEnd = currentStart.subtract(1, 'second');
+
+    // Construir filtros para la entidad
+    const entityFilters = {};
+    switch (entityType) {
+      case 'tipo':
+        entityFilters.tipoYerba = entity;
+        break;
+      case 'marca':
+        entityFilters.marca = entity;
+        break;
+      case 'pais':
+      case 'paisProd':
+        entityFilters.paisProd = entity;
+        break;
+      default:
+        entityFilters.tipoYerba = entity;
+    }
+
+    // Obtener datos para ambos períodos
+    const currentFilters = {
+      ...entityFilters,
+      startDate: currentStart.format('YYYY-MM-DD'),
+      endDate: currentEnd.format('YYYY-MM-DD')
+    };
+
+    const previousFilters = {
+      ...entityFilters,
+      startDate: previousStart.format('YYYY-MM-DD'),
+      endDate: previousEnd.format('YYYY-MM-DD')
+    };
+
+    const [currentData, previousData] = await Promise.all([
+      metricsService.getOverviewData(currentFilters),
+      metricsService.getOverviewData(previousFilters)
+    ]);
+
+    // Extraer métricas específicas
+    const currentVolumen = (currentData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0);
+    const previousVolumen = (previousData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0);
+    
+    const currentDescubrimiento = currentData.discoveryEvents || 0;
+    const previousDescubrimiento = previousData.discoveryEvents || 0;
+
+    const response = {
+      entity,
+      entityType,
+      metric,
+      periods: {
+        current: { start: currentStart.format('YYYY-MM-DD'), end: currentEnd.format('YYYY-MM-DD') },
+        previous: { start: previousStart.format('YYYY-MM-DD'), end: previousEnd.format('YYYY-MM-DD') }
+      },
+      volumen: {
+        current: currentVolumen,
+        previous: previousVolumen,
+        change: currentVolumen - previousVolumen,
+        changePercent: previousVolumen > 0 ? ((currentVolumen - previousVolumen) / previousVolumen) * 100 : (currentVolumen > 0 ? 100 : 0)
+      },
+      descubrimiento: {
+        current: currentDescubrimiento,
+        previous: previousDescubrimiento,
+        change: currentDescubrimiento - previousDescubrimiento,
+        changePercent: previousDescubrimiento > 0 ? ((currentDescubrimiento - previousDescubrimiento) / previousDescubrimiento) * 100 : (currentDescubrimiento > 0 ? 100 : 0)
+      },
+      rawData: {
+        current: {
+          discoveryRate: currentData.discoveryRate,
+          discoveryEvents: currentData.discoveryEvents,
+          usersWithTasting: currentData.usersWithTasting30d,
+          temporalEvents: currentVolumen
+        },
+        previous: {
+          discoveryRate: previousData.discoveryRate,
+          discoveryEvents: previousData.discoveryEvents,
+          usersWithTasting: previousData.usersWithTasting30d,
+          temporalEvents: previousVolumen
+        }
+      }
+    };
+
+    console.log('📊 DEBUG-METRICS-NEW - Resultado:', response);
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error en debug-metrics-new:', error);
+    res.status(500).json({ 
+      error: 'Error en debug de métricas',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 

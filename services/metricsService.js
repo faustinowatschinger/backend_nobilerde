@@ -132,6 +132,9 @@ class MetricsService {
       // sólo sobre los eventos relacionados con las yerbas que cumplen el filtro (tipo, marca, etc.).
       const discoveryData = await this.getDiscoveryRate(userQuery, calculatedStart, calculatedEnd, yerbaQuery);
       
+      // Calcular eventos de descubrimiento específicos
+      const discoveryEvents = await this.getDiscoveryEvents(userQuery, calculatedStart, calculatedEnd, yerbaQuery);
+      
       // Obtener actividad temporal con granularidad dinámica
       const temporalActivity = await this.getTemporalActivity(
         userQuery, 
@@ -162,6 +165,7 @@ class MetricsService {
         usersWithTasting30d,
         discoveryRate: discoveryData.rate,
         discoveryDeltaPp: discoveryData.deltaPp,
+        discoveryEvents, // Agregar eventos de descubrimiento específicos
         weeklyActivity: temporalActivity.data, // Mantener nombre por compatibilidad
         temporalActivity: temporalActivity, // Nueva estructura
         typeBreakdown,
@@ -2404,6 +2408,94 @@ class MetricsService {
         return { min: currentYear - 100, max: currentYear - 56 };
       default:
         return null;
+    }
+  }
+
+  /**
+   * Cuenta eventos de descubrimiento específicos (nuevas yerbas probadas por primera vez)
+   * Ahora acepta filtros de yerba para limitar a entidades específicas
+   */
+  async getDiscoveryEvents(userQuery, startDate, endDate, yerbaQuery = {}) {
+    try {
+      console.log('🔍 getDiscoveryEvents - Contando eventos de descubrimiento:', {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        userQuery,
+        yerbaQuery
+      });
+
+      // Obtener usuarios con catas en el período
+      const usersWithTasting = await this.getUsersWithTasting(userQuery, startDate, endDate);
+      
+      if (usersWithTasting.length === 0) {
+        console.log('❌ No hay usuarios con catas en el período');
+        return 0;
+      }
+
+      // Si se proporciona un filtro de yerba, obtener los IDs de yerbas permitidas
+      let allowedYerbaIds = null;
+      if (yerbaQuery && Object.keys(yerbaQuery).length > 0) {
+        try {
+          allowedYerbaIds = await Yerba.find(yerbaQuery).distinct('_id');
+          allowedYerbaIds = allowedYerbaIds.map(id => id.toString());
+          console.log(`🎯 Filtro de yerbas aplicado: ${allowedYerbaIds.length} yerbas permitidas`);
+        } catch (err) {
+          console.warn('⚠️ Error obteniendo yerbas permitidas por filtro, ignorando filtro:', err.message);
+          allowedYerbaIds = null;
+        }
+      }
+
+      let totalDiscoveryEvents = 0;
+
+      for (const userId of usersWithTasting) {
+        const user = await User.findById(userId);
+        if (!user || !user.shelf) continue;
+
+        // Obtener items probados en el período
+        let itemsEnPeriodo = user.shelf.filter(item => {
+          const fechaItem = new Date(item.addedAt);
+          return item.status === 'probada' &&
+                 (!startDate || fechaItem >= startDate) &&
+                 (!endDate || fechaItem <= endDate);
+        });
+
+        // Si hay filtro de yerbas, limitar a los IDs permitidos
+        if (allowedYerbaIds && allowedYerbaIds.length > 0) {
+          itemsEnPeriodo = itemsEnPeriodo.filter(item => 
+            allowedYerbaIds.includes((item.yerba || '').toString())
+          );
+        }
+
+        // Obtener yerbas probadas antes del período (limitadas por filtro si existe)
+        let itemsAnteriores = user.shelf.filter(item => {
+          const fechaItem = new Date(item.addedAt);
+          return item.status === 'probada' && startDate && fechaItem < startDate;
+        });
+
+        if (allowedYerbaIds && allowedYerbaIds.length > 0) {
+          itemsAnteriores = itemsAnteriores.filter(item => 
+            allowedYerbaIds.includes((item.yerba || '').toString())
+          );
+        }
+
+        const yerbasAnteriores = new Set(itemsAnteriores.map(item => item.yerba?.toString()));
+
+        // Contar cada yerba nueva probada por primera vez como un evento de descubrimiento
+        for (const item of itemsEnPeriodo) {
+          const yerbaId = item.yerba?.toString();
+          if (yerbaId && !yerbasAnteriores.has(yerbaId)) {
+            totalDiscoveryEvents++;
+            console.log(`🎯 Evento de descubrimiento: Usuario ${userId} descubrió yerba ${yerbaId}`);
+          }
+        }
+      }
+
+      console.log(`📊 Total eventos de descubrimiento: ${totalDiscoveryEvents}`);
+      return totalDiscoveryEvents;
+
+    } catch (error) {
+      console.error('❌ Error calculating discovery events:', error);
+      return 0;
     }
   }
 }
