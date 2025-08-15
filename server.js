@@ -22,6 +22,7 @@ import recommendationsRoutes from './routes/recommendationsRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import newsletterRoutes from './routes/newsletterRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import metricsRoutes from './routes/metricsRoutes.js';
 
 // --- Services
 import { AlertsService } from './services/alertsService.js';
@@ -57,7 +58,7 @@ app.use('/api',    recommendationsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api',    newsletterRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api', dashboardRoutes); // Montar también para rutas /api/metrics/*
+app.use('/api/metrics', metricsRoutes);
 
 console.log('📋 Routes mounted:');
 console.log('  - /users');
@@ -67,7 +68,7 @@ console.log('  - /api (recommendations)');
 console.log('  - /api/ai');
 console.log('  - /api (newsletter)');
 console.log('  - /api/dashboard');
-console.log('  - /api (metrics)');
+console.log('  - /api/metrics');
 
 // STATIC  ─ sirve las imágenes que realmente viven en public/yerbas
 app.use(

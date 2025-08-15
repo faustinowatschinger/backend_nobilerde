@@ -65,24 +65,31 @@ class MetricsService {
         // Calcular fechas basadas en el período de tiempo
         switch (timePeriod) {
           case 'dia':
-            // Para período de día, usar el día completo de hoy
-            calculatedEnd = now;
-            calculatedStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Inicio del día actual
+            // Para período de día, usar el día completo de hoy (00:00 a 23:59:59) en UTC
+            const today = new Date();
+            calculatedStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0));
+            calculatedEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999));
             break;
           case 'semana':
-            // Para período de semana, usar los últimos 7 días
-            calculatedEnd = now;
-            calculatedStart = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000)); // 7 días atrás
+            // Para período de semana, usar los últimos 7 días completos (incluyendo todo el día de hoy) en UTC
+            const nowWeek = new Date();
+            calculatedEnd = new Date(Date.UTC(nowWeek.getUTCFullYear(), nowWeek.getUTCMonth(), nowWeek.getUTCDate(), 23, 59, 59, 999));
+            const weekStart = new Date(nowWeek.getTime() - (6 * 24 * 60 * 60 * 1000)); // 6 días atrás + hoy = 7 días
+            calculatedStart = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate(), 0, 0, 0, 0));
             break;
           case 'mes':
-            // Para período de mes, usar las últimas 4 semanas (28 días)
-            calculatedEnd = now;
-            calculatedStart = new Date(now.getTime() - (28 * 24 * 60 * 60 * 1000)); // 28 días atrás
+            // Para período de mes, usar las últimas 4 semanas (28 días completos) en UTC
+            const nowMonth = new Date();
+            calculatedEnd = new Date(Date.UTC(nowMonth.getUTCFullYear(), nowMonth.getUTCMonth(), nowMonth.getUTCDate(), 23, 59, 59, 999));
+            const monthStart = new Date(nowMonth.getTime() - (27 * 24 * 60 * 60 * 1000)); // 27 días atrás + hoy = 28 días
+            calculatedStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), monthStart.getUTCDate(), 0, 0, 0, 0));
             break;
           case 'año':
-            // Para período de año, usar los últimos 12 meses
-            calculatedEnd = now;
-            calculatedStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            // Para período de año, usar los últimos 12 meses completos en UTC
+            const nowYear = new Date();
+            calculatedEnd = new Date(Date.UTC(nowYear.getUTCFullYear(), nowYear.getUTCMonth(), nowYear.getUTCDate(), 23, 59, 59, 999));
+            const yearStart = new Date(nowYear.getUTCFullYear() - 1, nowYear.getUTCMonth(), nowYear.getUTCDate());
+            calculatedStart = new Date(Date.UTC(yearStart.getUTCFullYear(), yearStart.getUTCMonth(), yearStart.getUTCDate(), 0, 0, 0, 0));
             break;
           default:
             calculatedEnd = now;
@@ -121,18 +128,29 @@ class MetricsService {
       const usersWithTasting30d = usersWithTasting.length;
       
       // Calcular tasa de descubrimiento
-      const discoveryData = await this.getDiscoveryRate(userQuery, calculatedStart, calculatedEnd);
+      // Pasar el filtro de yerba para que la tasa de descubrimiento se calcule
+      // sólo sobre los eventos relacionados con las yerbas que cumplen el filtro (tipo, marca, etc.).
+      const discoveryData = await this.getDiscoveryRate(userQuery, calculatedStart, calculatedEnd, yerbaQuery);
       
       // Obtener actividad temporal con granularidad dinámica
       const temporalActivity = await this.getTemporalActivity(
         userQuery, 
         calculatedStart, 
         calculatedEnd, 
-        timePeriod
+        timePeriod,
+        yerbaQuery  // Pasar el filtro de yerba
       );
       
       // Obtener distribución por tipos
+      console.log('\n🎯 === LLAMANDO A getTypeBreakdown ===');
+      console.log('📅 Con fechas calculadas:', {
+        start: calculatedStart.toISOString(),
+        end: calculatedEnd.toISOString()
+      });
       const typeBreakdown = await this.getTypeBreakdown(userQuery, yerbaQuery, calculatedStart, calculatedEnd);
+      console.log('🎯 === RESULTADO DE getTypeBreakdown ===');
+      console.log('📊 TypeBreakdown recibido:', typeBreakdown);
+      console.log('=======================================\n');
       
       // Obtener principales movimientos
       const topMovers = await this.getTopMovers(userQuery, yerbaQuery, calculatedStart, calculatedEnd);
@@ -148,7 +166,8 @@ class MetricsService {
         temporalActivity: temporalActivity, // Nueva estructura
         typeBreakdown,
         topMovers,
-        sample
+        sample,
+        activeUsers: sample.activeUsers || 0 // Agregar usuarios activos a nivel raíz
       };
 
     } catch (error) {
@@ -196,8 +215,14 @@ class MetricsService {
     if (filters.tipoYerba) query.tipo = filters.tipoYerba;
     if (filters.marca) query.marca = filters.marca;
     if (filters.origen) query.origen = filters.origen;
-    if (filters.paisProd) query.paisProd = filters.paisProd;
+    if (filters.paisProd) query.pais = filters.paisProd;
     if (filters.secado) query.secado = filters.secado;
+    if (filters.establecimiento) query.establecimiento = filters.establecimiento;
+    if (filters.containsPalo) query.containsPalo = filters.containsPalo;
+    if (filters.leafCut) query.leafCut = filters.leafCut;
+    if (filters.tipoEstacionamiento) query.tipoEstacionamiento = filters.tipoEstacionamiento;
+    if (filters.tiempoEstacionamiento) query.tiempoEstacionamiento = filters.tiempoEstacionamiento;
+    if (filters.produccion) query.produccion = filters.produccion;
 
     return query;
   }
@@ -233,60 +258,86 @@ class MetricsService {
 
   /**
    * Calcula la tasa de descubrimiento
+   * Ahora acepta un cuarto parámetro opcional `yerbaQuery` para filtrar por yerbas específicas.
    */
-  async getDiscoveryRate(userQuery, startDate, endDate) {
-    try {
-      // Obtener usuarios con catas en el período
+  async getDiscoveryRate(userQuery, startDate, endDate, yerbaQuery = {}) {
+     try {
+       // Obtener usuarios con catas en el período
       const usersWithTasting = await this.getUsersWithTasting(userQuery, startDate, endDate);
       
       if (usersWithTasting.length === 0) {
         return { rate: 0, deltaPp: 0 };
       }
 
-      // Contar usuarios que probaron nuevas yerbas
+      // Si se proporciona un filtro de yerba (tipo/marca/origen/etc.), obtener los IDs de yerbas
+      // que cumplen ese filtro para poder limitar el cálculo a esos items.
+      let allowedYerbaIds = null;
+      if (yerbaQuery && Object.keys(yerbaQuery).length > 0) {
+        try {
+          allowedYerbaIds = await Yerba.find(yerbaQuery).distinct('_id');
+          allowedYerbaIds = allowedYerbaIds.map(id => id.toString());
+        } catch (err) {
+          console.warn('⚠️ getDiscoveryRate - Error obteniendo yerbas permitidas por filtro, ignorando filtro:', err.message);
+          allowedYerbaIds = null;
+        }
+      }
+      
       let usersWithDiscovery = 0;
+      let denominatorUsers = 0; // usuarios que tuvieron al menos un evento relevante (según yerbaQuery)
       
       for (const userId of usersWithTasting) {
         const user = await User.findById(userId);
         if (!user || !user.shelf) continue;
 
         // Filtrar items probados en el período
-        const itemsEnPeriodo = user.shelf.filter(item => {
+        let itemsEnPeriodo = user.shelf.filter(item => {
           const fechaItem = new Date(item.addedAt);
           return item.status === 'probada' &&
                  (!startDate || fechaItem >= startDate) &&
                  (!endDate || fechaItem <= endDate);
         });
 
-        // Obtener yerbas únicas probadas en el período
+        // Si hay un filtro de yerbas, limitar los items a los IDs permitidos
+        if (allowedYerbaIds) {
+          itemsEnPeriodo = itemsEnPeriodo.filter(item => allowedYerbaIds.includes((item.yerba || '').toString()));
+        }
+
+        // Si el usuario no tuvo eventos relevantes para el filtro, no cuenta en el denominador
+        if (!itemsEnPeriodo || itemsEnPeriodo.length === 0) continue;
+        denominatorUsers++;
+
+        // Obtener yerbas únicas probadas en el período (según filtro)
         const yerbasEnPeriodo = [...new Set(itemsEnPeriodo.map(item => item.yerba?.toString()))];
-        
-        // Obtener yerbas probadas antes del período
-        const itemsAnteriores = user.shelf.filter(item => {
+
+        // Obtener yerbas probadas antes del período (también limitadas por filtro si existe)
+        let itemsAnteriores = user.shelf.filter(item => {
           const fechaItem = new Date(item.addedAt);
           return item.status === 'probada' && startDate && fechaItem < startDate;
         });
+        if (allowedYerbaIds) {
+          itemsAnteriores = itemsAnteriores.filter(item => allowedYerbaIds.includes((item.yerba || '').toString()));
+        }
         const yerbasAnteriores = new Set(itemsAnteriores.map(item => item.yerba?.toString()));
 
-        // Verificar si probó alguna yerba nueva
+        // Verificar si probó alguna yerba nueva (dentro del filtro)
         const hayNuevas = yerbasEnPeriodo.some(yerbaId => !yerbasAnteriores.has(yerbaId));
         if (hayNuevas) {
           usersWithDiscovery++;
         }
       }
 
-      const rate = usersWithDiscovery / usersWithTasting.length;
+      // Evitar división por cero
+      const rate = denominatorUsers > 0 ? usersWithDiscovery / denominatorUsers : 0;
       
       // TODO: Calcular delta comparando con período anterior
       const deltaPp = 0; // Placeholder
 
       return { rate, deltaPp };
-
-    } catch (error) {
-      console.error('Error calculating discovery rate:', error);
-      return { rate: 0, deltaPp: 0 };
-    }
-  }
+     } catch (error) {
+       console.error('Error calculating discovery rate:', error);
+       return { rate: 0, deltaPp: 0 };
+     }
+   }
 
   /**
    * Obtiene actividad semanal
@@ -341,33 +392,198 @@ class MetricsService {
    * Cuenta eventos (catas) en un período específico
    */
   async getEventsInPeriod(userQuery, startDate, endDate) {
-    const users = await User.find({
-      ...userQuery,
-      'shelf.addedAt': {
-        $gte: startDate,
-        $lte: endDate
-      },
-      'shelf.status': 'probada'
-    });
+    try {
+      console.log('🔍 getEventsInPeriod - Calculando eventos del período:', {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        userQuery
+      });
 
-    let totalEvents = 0;
-    for (const user of users) {
-      if (user.shelf) {
-        const eventsInPeriod = user.shelf.filter(item => {
-          const fecha = new Date(item.addedAt);
-          return item.status === 'probada' && fecha >= startDate && fecha <= endDate;
-        });
-        totalEvents += eventsInPeriod.length;
+      let totalEvents = 0;
+
+      // 1. Contar reviews (comentarios/puntuaciones en yerbas)
+      const reviewsAggregate = await Yerba.aggregate([
+        { $unwind: '$reviews' },
+        { 
+          $match: {
+            'reviews.createdAt': { $gte: startDate, $lte: endDate }
+          }
+        },
+        { $count: 'total' }
+      ]);
+      const reviewsCount = reviewsAggregate[0]?.total || 0;
+      totalEvents += reviewsCount;
+      console.log(`📝 Reviews en período: ${reviewsCount}`);
+
+      // 2. Contar respuestas (replies) a reviews
+      const repliesAggregate = await Yerba.aggregate([
+        { $unwind: '$reviews' },
+        { $unwind: '$reviews.replies' },
+        { 
+          $match: {
+            'reviews.replies.createdAt': { $gte: startDate, $lte: endDate }
+          }
+        },
+        { $count: 'total' }
+      ]);
+      const repliesCount = repliesAggregate[0]?.total || 0;
+      totalEvents += repliesCount;
+      console.log(`💬 Respuestas en período: ${repliesCount}`);
+
+      // 3. Contar items del shelf (yerbas probadas)
+      const users = await User.find({
+        ...userQuery,
+        'shelf.addedAt': {
+          $gte: startDate,
+          $lte: endDate
+        },
+        'shelf.status': 'probada'
+      });
+
+      let shelfEvents = 0;
+      for (const user of users) {
+        if (user.shelf) {
+          const eventsInPeriod = user.shelf.filter(item => {
+            const fecha = new Date(item.addedAt);
+            return item.status === 'probada' && fecha >= startDate && fecha <= endDate;
+          });
+          shelfEvents += eventsInPeriod.length;
+        }
       }
-    }
+      totalEvents += shelfEvents;
+      console.log(`🏷️ Items shelf probados en período: ${shelfEvents}`);
 
-    return totalEvents;
+      console.log(`📊 Total eventos en período: ${totalEvents} (reviews: ${reviewsCount}, respuestas: ${repliesCount}, shelf: ${shelfEvents})`);
+      
+      return totalEvents;
+    } catch (error) {
+      console.error('❌ Error en getEventsInPeriod:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Cuenta eventos (catas) en un período específico con filtros de yerba
+   */
+  async getEventsInPeriodWithYerbas(userQuery, yerbaQuery, startDate, endDate) {
+    try {
+      console.log('🔍 getEventsInPeriodWithYerbas - Calculando eventos del período:', {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        userQuery,
+        yerbaQuery
+      });
+
+      let totalEvents = 0;
+
+      // 1. Contar reviews (comentarios/puntuaciones en yerbas) con filtro de yerba
+      const reviewsMatchStage = {
+        'reviews.createdAt': { $gte: startDate, $lte: endDate }
+      };
+      
+      // Aplicar filtros de yerba si existen
+      if (Object.keys(yerbaQuery).length > 0) {
+        Object.assign(reviewsMatchStage, yerbaQuery);
+      }
+
+      const reviewsAggregate = await Yerba.aggregate([
+        { $match: yerbaQuery }, // Filtrar yerbas primero
+        { $unwind: '$reviews' },
+        { $match: reviewsMatchStage },
+        { $count: 'total' }
+      ]);
+      
+      const reviewsCount = reviewsAggregate[0]?.total || 0;
+      totalEvents += reviewsCount;
+      console.log(`📝 Reviews en período (con filtros): ${reviewsCount}`);
+
+      // 2. Contar respuestas (replies) a reviews con filtro de yerba
+      const repliesAggregate = await Yerba.aggregate([
+        { $match: yerbaQuery }, // Filtrar yerbas primero
+        { $unwind: '$reviews' },
+        { $unwind: '$reviews.replies' },
+        { 
+          $match: {
+            'reviews.replies.createdAt': { $gte: startDate, $lte: endDate }
+          }
+        },
+        { $count: 'total' }
+      ]);
+      
+      const repliesCount = repliesAggregate[0]?.total || 0;
+      totalEvents += repliesCount;
+      console.log(`💬 Respuestas en período (con filtros): ${repliesCount}`);
+
+      // 3. Contar items del shelf (yerbas probadas) con filtros de yerba
+      let shelfEvents = 0;
+      
+      if (Object.keys(yerbaQuery).length > 0) {
+        // Si hay filtros de yerba, necesitamos hacer un lookup con las yerbas filtradas
+        const filteredYerbas = await Yerba.find(yerbaQuery).distinct('_id');
+        
+        if (filteredYerbas.length > 0) {
+          const users = await User.find({
+            ...userQuery,
+            'shelf.addedAt': {
+              $gte: startDate,
+              $lte: endDate
+            },
+            'shelf.status': 'probada',
+            'shelf.yerba': { $in: filteredYerbas }
+          });
+
+          for (const user of users) {
+            if (user.shelf) {
+              const eventsInPeriod = user.shelf.filter(item => {
+                const fecha = new Date(item.addedAt);
+                const yerbaId = item.yerba?.toString();
+                return item.status === 'probada' && 
+                       fecha >= startDate && 
+                       fecha <= endDate &&
+                       filteredYerbas.some(id => id.toString() === yerbaId);
+              });
+              shelfEvents += eventsInPeriod.length;
+            }
+          }
+        }
+      } else {
+        // Sin filtros de yerba, contar todos los eventos de shelf
+        const users = await User.find({
+          ...userQuery,
+          'shelf.addedAt': {
+            $gte: startDate,
+            $lte: endDate
+          },
+          'shelf.status': 'probada'
+        });
+
+        for (const user of users) {
+          if (user.shelf) {
+            const eventsInPeriod = user.shelf.filter(item => {
+              const fecha = new Date(item.addedAt);
+              return item.status === 'probada' && fecha >= startDate && fecha <= endDate;
+            });
+            shelfEvents += eventsInPeriod.length;
+          }
+        }
+      }
+      
+      totalEvents += shelfEvents;
+      console.log(`🏷️ Items shelf probados en período (con filtros): ${shelfEvents}`);
+
+      console.log(`📊 Total eventos en período con filtros: ${totalEvents} (reviews: ${reviewsCount}, respuestas: ${repliesCount}, shelf: ${shelfEvents})`);
+      
+      return totalEvents;
+    } catch (error) {
+      console.error('❌ Error en getEventsInPeriodWithYerbas:', error);
+      return 0;
+    }
   }
 
   /**
    * Obtiene actividad temporal con granularidad dinámica
    */
-  async getTemporalActivity(userQuery, startDate, endDate, timePeriod = 'mes') {
+  async getTemporalActivity(userQuery, startDate, endDate, timePeriod = 'mes', yerbaQuery = {}) {
     try {
       // Determinar la granularidad basada en el período seleccionado
       let granularity;
@@ -401,6 +617,7 @@ class MetricsService {
 
       console.log(`📊 Generando actividad temporal: ${granularity} para período ${timePeriod}`);
       console.log(`📅 Rango de fechas: ${startDate} a ${endDate}`);
+      console.log(`🎯 Query de yerbas:`, yerbaQuery);
 
       const periods = this.generateTemporalPeriods(startDate, endDate, granularity);
       const temporalData = [];
@@ -408,7 +625,7 @@ class MetricsService {
       console.log(`📈 Períodos generados: ${periods.length}`);
 
       for (const period of periods) {
-        const events = await this.getEventsInPeriod(userQuery, period.start, period.end);
+        const events = await this.getEventsInPeriodWithYerbas(userQuery, yerbaQuery, period.start, period.end);
         
         // Crear objeto de datos con formato consistente
         const periodData = {
@@ -424,7 +641,8 @@ class MetricsService {
             granularity,
             timePeriod,
             originalStart: startDate,
-            originalEnd: endDate
+            originalEnd: endDate,
+            yerbaQuery
           }
         };
         
@@ -646,39 +864,17 @@ class MetricsService {
   }
 
   /**
-   * Cuenta eventos (catas) en un período específico
-   */
-  async getEventsInPeriod(userQuery, startDate, endDate) {
-    const users = await User.find({
-      ...userQuery,
-      'shelf.addedAt': {
-        $gte: startDate,
-        $lte: endDate
-      },
-      'shelf.status': 'probada'
-    });
-
-    let totalEvents = 0;
-    for (const user of users) {
-      if (user.shelf) {
-        const eventsInPeriod = user.shelf.filter(item => {
-          const fecha = new Date(item.addedAt);
-          return item.status === 'probada' && fecha >= startDate && fecha <= endDate;
-        });
-        totalEvents += eventsInPeriod.length;
-      }
-    }
-
-    return totalEvents;
-  }
-
-  /**
    * Obtiene distribución por tipos de yerba
    */
   async getTypeBreakdown(userQuery, yerbaQuery, startDate, endDate) {
     try {
-      console.log('🔍 getTypeBreakdown - Iniciando análisis...');
-      console.log('📅 Filtros de fecha:', { startDate, endDate });
+      console.log('\n🔍 ===== INICIO getTypeBreakdown =====');
+      console.log('📅 Filtros de fecha:', { 
+        startDate: startDate?.toISOString(), 
+        endDate: endDate?.toISOString(),
+        startDateLocal: startDate?.toLocaleDateString(),
+        endDateLocal: endDate?.toLocaleDateString()
+      });
       console.log('👥 Filtros de usuario:', userQuery);
       console.log('🌿 Filtros de yerba:', yerbaQuery);
 
@@ -725,62 +921,66 @@ class MetricsService {
         }
       }
 
-      console.log(`\n📈 Total de catas encontradas en período: ${totalCatas}`);
+      console.log(`\n📈 RESULTADO CRÍTICO: Total de catas encontradas en período: ${totalCatas}`);
+      console.log(`📊 Detalle por tipo:`, typeBreakdown.map(t => `${t.label}: ${t.count}`).join(', '));
 
-      // Si hay muy pocas catas en el período (menos de 3), obtener datos de todos los tiempos
-      if (totalCatas < 3) {
-        console.log('⚠️ Pocas catas en el período especificado (< 3)');
-        console.log('🔄 Obteniendo datos de todos los tiempos para contexto...');
+      // LÓGICA GARANTIZADA: Siempre mostrar datos del período actual sin importar la cantidad
+      // Solo usar datos históricos cuando NO HAY DATOS EN ABSOLUTO (totalCatas === 0)
+      
+      if (totalCatas === 0) {
+        console.log('⚠️ No hay catas en el período especificado - NO HAY DATOS EN ABSOLUTO');
+        console.log('🔄 Obteniendo datos históricos como referencia...');
         
         const allTimeBreakdown = [];
         let totalCatasAllTime = 0;
         
         for (const [tipo, yerbaIds] of Object.entries(yerbasByType)) {
           const catasAllTime = await this.getCatasForYerbas(userQuery, yerbaIds, null, null);
-          console.log(`📊 Catas totales para ${tipo}: ${catasAllTime}`);
+          console.log(`📊 Catas históricas para ${tipo}: ${catasAllTime}`);
           
           if (catasAllTime > 0) {
             allTimeBreakdown.push({
               label: tipo,
               count: catasAllTime,
               share: 0,
-              period: 'all-time'
+              period: 'all-time',
+              note: 'Datos históricos (sin datos en el período seleccionado)'
             });
             totalCatasAllTime += catasAllTime;
           }
         }
 
-        // Si hay datos de todos los tiempos, usarlos como base
+        // Si hay datos históricos, calcular porcentajes y retornar
         if (totalCatasAllTime > 0) {
-          console.log(`📊 Total catas de todos los tiempos: ${totalCatasAllTime}`);
+          console.log(`📊 Total catas históricas: ${totalCatasAllTime}`);
           
-          // Calcular porcentajes de todos los tiempos
           allTimeBreakdown.forEach(item => {
             item.share = (item.count / totalCatasAllTime) * 100;
           });
 
-          // Ordenar por cantidad
           const sortedAllTime = allTimeBreakdown.sort((a, b) => b.count - a.count);
-          
-          // Agregar nota sobre el período
-          sortedAllTime.forEach(item => {
-            item.note = 'Datos históricos (todos los tiempos)';
-          });
-
-          console.log('✅ Usando datos históricos para distribución por tipos');
+          console.log('✅ Usando datos históricos (sin datos en período actual)');
           return sortedAllTime;
         }
+        
+        // Si no hay datos históricos tampoco, retornar array vacío
+        console.log('⚠️ No hay datos ni en el período ni históricamente');
+        return [];
       }
 
-      // Calcular porcentajes del período actual
-      if (totalCatas > 0) {
-        typeBreakdown.forEach(item => {
-          item.share = (item.count / totalCatas) * 100;
-        });
-      }
+      // HAY DATOS EN EL PERÍODO: calcular porcentajes y retornar SIEMPRE
+      console.log(`✅ USANDO DATOS DEL PERÍODO SELECCIONADO - Total catas: ${totalCatas}`);
+      console.log('📊 No importa si son pocos datos, se muestran los datos reales del período');
+      
+      typeBreakdown.forEach(item => {
+        item.share = (item.count / totalCatas) * 100;
+        item.period = 'current';
+      });
 
       const result = typeBreakdown.sort((a, b) => b.count - a.count);
-      console.log('✅ Resultado final getTypeBreakdown:', result);
+      console.log('\n✅ ===== RESULTADO FINAL getTypeBreakdown =====');
+      console.log('📊 Datos del período seleccionado:', result);
+      console.log('==================================================\n');
       
       return result;
 
@@ -859,10 +1059,11 @@ class MetricsService {
 
   /**
    * Obtiene principales movimientos (cambios en popularidad)
+   * Basado en actividad real: reviews, likes, respuestas
    */
   async getTopMovers(userQuery, yerbaQuery, startDate, endDate) {
     try {
-      console.log('🔍 getTopMovers - Calculando cambios reales en popularidad...');
+      console.log('🔍 getTopMovers - Calculando cambios reales en popularidad basados en reviews...');
       console.log('📅 Filtros de fecha:', { startDate, endDate });
       
       // Si no hay fechas, no podemos calcular cambios
@@ -880,102 +1081,333 @@ class MetricsService {
       console.log(`  - Período actual: ${startDate.toISOString()} a ${endDate.toISOString()}`);
       console.log(`  - Período anterior: ${previousStart.toISOString()} a ${previousEnd.toISOString()}`);
 
-      // Obtener yerbas que coinciden con los filtros
-      const yerbas = await Yerba.find(yerbaQuery).limit(20);
-      console.log(`🌿 Yerbas encontradas para análisis: ${yerbas.length}`);
+      // Pipeline para obtener actividad de reviews en período actual
+      const currentActivityPipeline = [
+        // Filtrar yerbas según criterios
+        ...(Object.keys(yerbaQuery).length > 0 ? [{ $match: yerbaQuery }] : []),
+        
+        // Desenrollar reviews
+        { $unwind: { path: '$reviews', preserveNullAndEmptyArrays: true } },
+        
+        // Filtrar reviews en el período actual
+        {
+          $match: {
+            'reviews.createdAt': {
+              $gte: startDate,
+              $lte: endDate
+            }
+          }
+        },
+        
+        // Calcular score de actividad por yerba
+        {
+          $group: {
+            _id: '$_id',
+            nombre: { $first: '$nombre' },
+            marca: { $first: '$marca' },
+            reviewsCount: { $sum: 1 },
+            avgRating: { $avg: '$reviews.score' },
+            totalLikes: {
+              $sum: {
+                $cond: {
+                  if: { $isArray: '$reviews.likes' },
+                  then: { $size: '$reviews.likes' },
+                  else: 0
+                }
+              }
+            },
+            totalReplies: {
+              $sum: {
+                $cond: {
+                  if: { $isArray: '$reviews.replies' },
+                  then: { $size: '$reviews.replies' },
+                  else: 0
+                }
+              }
+            }
+          }
+        },
+        
+        // Calcular score de popularidad
+        {
+          $addFields: {
+            popularityScore: {
+              $add: [
+                { $multiply: ['$reviewsCount', 10] }, // 10 puntos por review
+                { $multiply: ['$totalLikes', 2] }, // 2 puntos por like
+                { $multiply: ['$totalReplies', 3] }, // 3 puntos por respuesta
+                { $multiply: [{ $ifNull: ['$avgRating', 0] }, 5] } // 5 puntos por punto de rating
+              ]
+            }
+          }
+        }
+      ];
+      
+      // Pipeline para período anterior (mismo pero con fechas diferentes)
+      const previousActivityPipeline = [
+        // Filtrar yerbas según criterios
+        ...(Object.keys(yerbaQuery).length > 0 ? [{ $match: yerbaQuery }] : []),
+        
+        // Desenrollar reviews
+        { $unwind: { path: '$reviews', preserveNullAndEmptyArrays: true } },
+        
+        // Filtrar reviews en el período anterior
+        {
+          $match: {
+            'reviews.createdAt': {
+              $gte: previousStart,
+              $lte: previousEnd
+            }
+          }
+        },
+        
+        // Calcular score de actividad por yerba
+        {
+          $group: {
+            _id: '$_id',
+            nombre: { $first: '$nombre' },
+            marca: { $first: '$marca' },
+            reviewsCount: { $sum: 1 },
+            avgRating: { $avg: '$reviews.score' },
+            totalLikes: {
+              $sum: {
+                $cond: {
+                  if: { $isArray: '$reviews.likes' },
+                  then: { $size: '$reviews.likes' },
+                  else: 0
+                }
+              }
+            },
+            totalReplies: {
+              $sum: {
+                $cond: {
+                  if: { $isArray: '$reviews.replies' },
+                  then: { $size: '$reviews.replies' },
+                  else: 0
+                }
+              }
+            }
+          }
+        },
+        
+        // Calcular score de popularidad
+        {
+          $addFields: {
+            popularityScore: {
+              $add: [
+                { $multiply: ['$reviewsCount', 10] }, // 10 puntos por review
+                { $multiply: ['$totalLikes', 2] }, // 2 puntos por like
+                { $multiply: ['$totalReplies', 3] }, // 3 puntos por respuesta
+                { $multiply: [{ $ifNull: ['$avgRating', 0] }, 5] } // 5 puntos por punto de rating
+              ]
+            }
+          }
+        }
+      ];
 
-      if (yerbas.length === 0) {
-        console.log('⚠️ No se encontraron yerbas para analizar');
-        return [];
-      }
+      // Ejecutar ambos pipelines
+      const [currentActivity, previousActivity] = await Promise.all([
+        Yerba.aggregate(currentActivityPipeline),
+        Yerba.aggregate(previousActivityPipeline)
+      ]);
+
+      console.log(`📊 Yerbas con actividad actual: ${currentActivity.length}`);
+      console.log(`📊 Yerbas con actividad anterior: ${previousActivity.length}`);
+
+      // Crear mapa de actividad anterior para comparación fácil
+      const previousActivityMap = {};
+      previousActivity.forEach(yerba => {
+        previousActivityMap[yerba._id.toString()] = yerba;
+      });
 
       const topMovers = [];
-      let totalInteractionsCurrent = 0;
-      let totalInteractionsPrevious = 0;
+      let totalCurrentScore = 0;
+      let totalPreviousScore = 0;
 
-      // Analizar cada yerba
-      for (const yerba of yerbas) {
-        console.log(`\n🔍 Analizando yerba: ${yerba.marca} ${yerba.nombre}`);
-        
-        // Calcular popularidad en período actual
-        const currentPopularity = await this.getYerbaPopularity(
-          yerba._id, 
-          userQuery, 
-          startDate, 
-          endDate
-        );
-        
-        // Calcular popularidad en período anterior
-        const previousPopularity = await this.getYerbaPopularity(
-          yerba._id, 
-          userQuery, 
-          previousStart, 
-          previousEnd
-        );
-        
-        totalInteractionsCurrent += currentPopularity.interactions;
-        totalInteractionsPrevious += previousPopularity.interactions;
-        
-        console.log(`  📊 Popularidad actual: ${currentPopularity.score} (${currentPopularity.interactions} interacciones)`);
-        console.log(`  📊 Popularidad anterior: ${previousPopularity.score} (${previousPopularity.interactions} interacciones)`);
+      // Analizar cada yerba con actividad actual
+      currentActivity.forEach(currentYerba => {
+        const yerbaId = currentYerba._id.toString();
+        const previousYerba = previousActivityMap[yerbaId] || {
+          popularityScore: 0,
+          reviewsCount: 0,
+          totalLikes: 0,
+          totalReplies: 0,
+          avgRating: 0
+        };
 
-        // Solo incluir yerbas con actividad significativa
-        if (currentPopularity.interactions > 0 || previousPopularity.interactions > 0) {
-          // Calcular cambio porcentual solo si hay datos significativos
-          let deltaPct = 0;
-          let changeType = 'stable';
-          
-          if (previousPopularity.interactions > 0 && currentPopularity.interactions > 0) {
-            // Actividad en ambos períodos
-            if (previousPopularity.score > 0) {
-              deltaPct = ((currentPopularity.score - previousPopularity.score) / previousPopularity.score) * 100;
-              // Limitar el cambio a un rango razonable (-200% a +200%)
-              deltaPct = Math.max(-200, Math.min(200, deltaPct));
-            }
-            changeType = deltaPct > 0 ? 'increasing' : deltaPct < 0 ? 'decreasing' : 'stable';
-          } else if (currentPopularity.interactions > 0 && previousPopularity.interactions === 0) {
-            // Nueva actividad
-            deltaPct = 25; // Valor moderado para nuevas yerbas
-            changeType = 'new';
-          } else if (currentPopularity.interactions === 0 && previousPopularity.interactions > 0) {
-            // Pérdida de actividad
-            deltaPct = -25; // Valor moderado para yerbas inactivas
-            changeType = 'inactive';
-          }
+        const currentScore = currentYerba.popularityScore || 0;
+        const previousScore = previousYerba.popularityScore || 0;
+        
+        totalCurrentScore += currentScore;
+        totalPreviousScore += previousScore;
 
-          console.log(`  📈 Cambio porcentual: ${deltaPct.toFixed(1)}% (${changeType})`);
+        console.log(`\n🔍 ${currentYerba.marca} ${currentYerba.nombre}:`);
+        console.log(`  📊 Score actual: ${currentScore} (${currentYerba.reviewsCount} reviews, ${currentYerba.totalLikes} likes, ${currentYerba.totalReplies} respuestas)`);
+        console.log(`  📊 Score anterior: ${previousScore} (${previousYerba.reviewsCount} reviews, ${previousYerba.totalLikes} likes, ${previousYerba.totalReplies} respuestas)`);
 
-          topMovers.push({
-            label: `${yerba.marca} ${yerba.nombre}`,
-            deltaPct: parseFloat(deltaPct.toFixed(1)),
-            currentScore: currentPopularity.score,
-            previousScore: previousPopularity.score,
-            currentInteractions: currentPopularity.interactions,
-            previousInteractions: previousPopularity.interactions,
-            changeType,
-            yerbaId: yerba._id.toString()
-          });
+        // Calcular cambio porcentual y tipo
+        let deltaPct = 0;
+        let changeType = 'stable';
+        
+        if (previousScore > 0 && currentScore > 0) {
+          // Actividad en ambos períodos
+          deltaPct = ((currentScore - previousScore) / previousScore) * 100;
+          // Limitar el cambio a un rango razonable (-200% a +200%)
+          deltaPct = Math.max(-200, Math.min(200, deltaPct));
+          changeType = deltaPct > 5 ? 'increasing' : deltaPct < -5 ? 'decreasing' : 'stable';
+        } else if (currentScore > 0 && previousScore === 0) {
+          // Nueva actividad
+          deltaPct = 100; // 100% de incremento para nuevas yerbas con actividad
+          changeType = 'new';
+        } else if (currentScore === 0 && previousScore > 0) {
+          // Pérdida de actividad
+          deltaPct = -100; // 100% de decremento para yerbas que perdieron actividad
+          changeType = 'inactive';
         }
-      }
 
-      console.log(`\n📊 Resumen de interacciones:`);
-      console.log(`  - Período actual: ${totalInteractionsCurrent} interacciones`);
-      console.log(`  - Período anterior: ${totalInteractionsPrevious} interacciones`);
+        // Solo incluir yerbas con actividad significativa o cambios importantes
+        if (currentScore > 0 || previousScore > 0) {
+          console.log(`  📈 Cambio: ${deltaPct.toFixed(1)}% (${changeType})`);
 
-      // Si hay muy pocas interacciones, agregar nota
-      if (totalInteractionsCurrent < 3 && totalInteractionsPrevious < 3) {
-        console.log('⚠️ Pocas interacciones en ambos períodos - datos limitados');
-      }
+          // Validar que los datos estén completos antes de añadir
+          const isValidEntry = currentYerba.marca && 
+                              currentYerba.nombre && 
+                              changeType && 
+                              !isNaN(deltaPct) && 
+                              !isNaN(currentScore);
 
-      // Ordenar por magnitud del cambio y limitar a top 5
+          if (isValidEntry) {
+            topMovers.push({
+              label: `${currentYerba.marca} ${currentYerba.nombre}`,
+              yerbaName: currentYerba.nombre,
+              yerbaType: currentYerba.marca,
+              deltaPct: parseFloat(deltaPct.toFixed(1)),
+              currentScore: parseFloat(currentScore.toFixed(1)),
+              previousScore: parseFloat(previousScore.toFixed(1)),
+              currentInteractions: currentYerba.reviewsCount + currentYerba.totalLikes + currentYerba.totalReplies,
+              previousInteractions: previousYerba.reviewsCount + previousYerba.totalLikes + previousYerba.totalReplies,
+              changeType,
+              yerbaId: yerbaId,
+              // Datos adicionales para análisis
+              currentReviews: currentYerba.reviewsCount,
+              previousReviews: previousYerba.reviewsCount,
+              currentLikes: currentYerba.totalLikes,
+              previousLikes: previousYerba.totalLikes,
+              currentReplies: currentYerba.totalReplies,
+              previousReplies: previousYerba.totalReplies,
+              currentRating: parseFloat((currentYerba.avgRating || 0).toFixed(1)),
+              previousRating: parseFloat((previousYerba.avgRating || 0).toFixed(1))
+            });
+          } else {
+            console.warn(`⚠️ Entrada inválida filtrada: ${currentYerba.marca} ${currentYerba.nombre}`, {
+              marca: currentYerba.marca,
+              nombre: currentYerba.nombre,
+              changeType,
+              deltaPct,
+              currentScore
+            });
+          }
+        }
+      });
+
+      // También revisar yerbas que tenían actividad anterior pero no actual
+      Object.keys(previousActivityMap).forEach(yerbaId => {
+        if (!currentActivity.find(y => y._id.toString() === yerbaId)) {
+          const previousYerba = previousActivityMap[yerbaId];
+          const previousScore = previousYerba.popularityScore || 0;
+          
+          // Solo incluir si tenía actividad significativa anterior y los datos están completos
+          if (previousScore > 0 && previousYerba.marca && previousYerba.nombre) {
+            console.log(`\n🔍 ${previousYerba.marca} ${previousYerba.nombre} (solo actividad anterior):`);
+            console.log(`  📊 Score anterior: ${previousScore}, Score actual: 0`);
+            
+            topMovers.push({
+              label: `${previousYerba.marca} ${previousYerba.nombre}`,
+              yerbaName: previousYerba.nombre,
+              yerbaType: previousYerba.marca,
+              deltaPct: -100,
+              currentScore: 0,
+              previousScore: parseFloat(previousScore.toFixed(1)),
+              currentInteractions: 0,
+              previousInteractions: previousYerba.reviewsCount + previousYerba.totalLikes + previousYerba.totalReplies,
+              changeType: 'inactive',
+              yerbaId: yerbaId,
+              currentReviews: 0,
+              previousReviews: previousYerba.reviewsCount,
+              currentLikes: 0,
+              previousLikes: previousYerba.totalLikes,
+              currentReplies: 0,
+              previousReplies: previousYerba.totalReplies,
+              currentRating: 0,
+              previousRating: parseFloat((previousYerba.avgRating || 0).toFixed(1))
+            });
+          }
+        }
+      });
+
+      console.log(`\n📊 Resumen de actividad (basado en reviews):`);
+      console.log(`  - Score total actual: ${totalCurrentScore.toFixed(1)}`);
+      console.log(`  - Score total anterior: ${totalPreviousScore.toFixed(1)}`);
+
+      // Filtrar y ordenar resultados con validación más estricta
       const result = topMovers
-        .sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct))
+        .filter(item => {
+          // Validar que el item tenga todos los campos necesarios
+          const hasValidData = item.label && 
+                               item.changeType && 
+                               typeof item.deltaPct === 'number' && 
+                               !isNaN(item.deltaPct) &&
+                               typeof item.currentScore === 'number' && 
+                               !isNaN(item.currentScore) &&
+                               Math.abs(item.deltaPct) > 0; // Solo cambios reales
+          
+          if (!hasValidData) {
+            console.warn(`⚠️ Item filtrado por datos inválidos:`, item);
+          }
+          
+          return hasValidData;
+        })
+        .sort((a, b) => {
+          // Para períodos cortos, priorizar yerbas con actividad actual
+          // Para períodos largos, priorizar por magnitud del cambio
+          const periodDurationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+          const isShortPeriod = periodDurationHours <= 24; // Menos de 24 horas (período "dia")
+          
+          if (isShortPeriod) {
+            // Para períodos cortos, priorizar:
+            // 1. Yerbas con actividad actual (currentScore > 0)
+            // 2. Cambios positivos sobre negativos
+            // 3. Magnitud del cambio
+            const aHasCurrentActivity = a.currentScore > 0 ? 1000 : 0;
+            const bHasCurrentActivity = b.currentScore > 0 ? 1000 : 0;
+            const aPositiveChange = a.deltaPct > 0 ? 100 : 0;
+            const bPositiveChange = b.deltaPct > 0 ? 100 : 0;
+            const aMagnitude = Math.abs(a.deltaPct) + (a.currentScore * 0.1);
+            const bMagnitude = Math.abs(b.deltaPct) + (b.currentScore * 0.1);
+            
+            const aScore = aHasCurrentActivity + aPositiveChange + aMagnitude;
+            const bScore = bHasCurrentActivity + bPositiveChange + bMagnitude;
+            
+            return bScore - aScore;
+          } else {
+            // Para períodos largos, usar la lógica original
+            const aMagnitude = Math.abs(a.deltaPct) + (a.currentScore * 0.1);
+            const bMagnitude = Math.abs(b.deltaPct) + (b.currentScore * 0.1);
+            return bMagnitude - aMagnitude;
+          }
+        })
         .slice(0, 5);
       
-      console.log(`\n✅ Top 5 movers calculados: ${result.length} yerbas`);
-      result.forEach((item, index) => {
-        console.log(`  ${index + 1}. ${item.label}: ${item.deltaPct > 0 ? '+' : ''}${item.deltaPct}% (${item.changeType})`);
-      });
+      console.log(`\n✅ Top 5 movers calculados (basado en reviews): ${result.length} yerbas`);
+      if (result.length === 0) {
+        console.log('⚠️ No se encontraron movimientos válidos para este período');
+      } else {
+        result.forEach((item, index) => {
+          console.log(`  ${index + 1}. ${item.label}: ${item.deltaPct > 0 ? '+' : ''}${item.deltaPct}% (${item.changeType})`);
+          console.log(`     Score: ${item.previousScore} → ${item.currentScore}`);
+          console.log(`     Reviews: ${item.previousReviews} → ${item.currentReviews}, Likes: ${item.previousLikes} → ${item.currentLikes}`);
+        });
+      }
       
       return result;
 
@@ -986,6 +1418,7 @@ class MetricsService {
   }
 
   /**
+  
    * Calcula la popularidad de una yerba en un período específico
    */
   async getYerbaPopularity(yerbaId, userQuery, startDate, endDate) {
@@ -1045,20 +1478,118 @@ class MetricsService {
    */
   async getSampleInfo(userQuery, startDate, endDate) {
     try {
-      const users = await User.find(userQuery);
+      console.log('🔍 getSampleInfo llamada con:', { startDate, endDate });
+      
+      // Calcular usuarios activos en el período específico (con actividad real)
+      console.log('🔍 Calculando usuarios activos...');
+      const activeUsers = await this.getActiveUsersInPeriod(userQuery, startDate, endDate);
+      console.log('🔍 activeUsers calculado:', activeUsers);
+
+      // Para nUsers, usar también usuarios activos en el período
+      // Ya no tiene sentido contar todos los usuarios de la base, sino los que tuvieron actividad
+      const nUsers = activeUsers;
+
       const events = await this.getEventsInPeriod(userQuery, 
         new Date(startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)), 
         new Date(endDate || new Date())
       );
 
-      return {
-        nUsers: users.length,
-        nEvents: events
+      const result = {
+        nUsers: nUsers, // Usuarios con actividad en el período
+        nEvents: events,
+        activeUsers: activeUsers // Mantenemos por compatibilidad
       };
+      
+      console.log('🔍 getSampleInfo resultado:', result);
+      return result;
 
     } catch (error) {
       console.error('Error getting sample info:', error);
-      return { nUsers: 0, nEvents: 0 };
+      return { nUsers: 0, nEvents: 0, activeUsers: 0 };
+    }
+  }
+
+  /**
+   * Obtiene el número de usuarios que tuvieron actividad en el período específico
+   */
+  async getActiveUsersInPeriod(userQuery, startDate, endDate) {
+    try {
+      if (!startDate || !endDate) return 0;
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      // Conjunto para usuarios únicos con cualquier tipo de actividad
+      const activeUsersSet = new Set();
+
+      // 1. Usuarios con reviews en yerbas
+      const usersWithReviews = await Yerba.aggregate([
+        { $unwind: { path: '$reviews', preserveNullAndEmptyArrays: false } },
+        {
+          $match: {
+            'reviews.createdAt': { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: '$reviews.user'
+          }
+        }
+      ]);
+
+      usersWithReviews.forEach(user => activeUsersSet.add(user._id.toString()));
+
+      // 2. Usuarios con respuestas a reviews
+      const usersWithReplies = await Yerba.aggregate([
+        { $unwind: { path: '$reviews', preserveNullAndEmptyArrays: false } },
+        { $unwind: { path: '$reviews.replies', preserveNullAndEmptyArrays: false } },
+        {
+          $match: {
+            'reviews.replies.createdAt': { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: '$reviews.replies.user'
+          }
+        }
+      ]);
+
+      usersWithReplies.forEach(user => activeUsersSet.add(user._id.toString()));
+
+      // 3. Usuarios con actividad en shelf (items marcados como probados)
+      const usersWithShelfActivity = await User.aggregate([
+        // Filtrar usuarios según criterios
+        ...(Object.keys(userQuery).length > 0 ? [{ $match: userQuery }] : []),
+        { $unwind: { path: '$shelf', preserveNullAndEmptyArrays: false } },
+        {
+          $match: {
+            'shelf.addedAt': { $gte: start, $lte: end },
+            'shelf.status': 'probada'
+          }
+        },
+        {
+          $group: {
+            _id: '$_id'
+          }
+        }
+      ]);
+
+      usersWithShelfActivity.forEach(user => activeUsersSet.add(user._id.toString()));
+
+      const activeUsersCount = activeUsersSet.size;
+
+      console.log(`📊 Usuarios activos en período ${start.toISOString()} - ${end.toISOString()}:`);
+      console.log(`  - Con reviews: ${usersWithReviews.length}`);
+      console.log(`  - Con respuestas: ${usersWithReplies.length}`);
+      console.log(`  - Con shelf activity: ${usersWithShelfActivity.length}`);
+      console.log(`  - Total únicos: ${activeUsersCount}`);
+
+      return activeUsersCount;
+
+    } catch (error) {
+      console.error('Error getting active users in period:', error);
+      return 0;
     }
   }
 
@@ -1489,7 +2020,7 @@ class MetricsService {
         calculatedStart = new Date(now.getTime() - (daysToSubtract * 24 * 60 * 60 * 1000));
       }
 
-      console.log('📅 Período calculado para notas por interacciones:', {
+      console.log('📅 Período calculado para comentarios por interacciones:', {
         start: calculatedStart,
         end: calculatedEnd
       });
@@ -1497,7 +2028,6 @@ class MetricsService {
       // Importar dependencias necesarias
       const { Yerba } = await import('../config/yerbasModel.js');
       const User = (await import('../config/userModel.js')).default;
-      const { NOTE_TRANSLATIONS } = await import('../config/flavorNotes.js');
 
       // Construir filtros de usuario
       const userMatchFilters = {};
@@ -1521,7 +2051,7 @@ class MetricsService {
       if (paisProd) yerbaMatchFilters.pais = paisProd;
       if (secado) yerbaMatchFilters.secado = secado;
 
-      // Pipeline para obtener reviews con interacciones en el período
+      // Pipeline para obtener reviews con más interacciones en el período
       const pipeline = [
         // Filtrar yerbas según criterios
         ...(Object.keys(yerbaMatchFilters).length > 0 ? [{ $match: yerbaMatchFilters }] : []),
@@ -1529,14 +2059,14 @@ class MetricsService {
         // Desenrollar reviews
         { $unwind: '$reviews' },
         
-        // Filtrar reviews en el período con notas
+        // Filtrar reviews en el período que tengan comentario
         {
           $match: {
             'reviews.createdAt': {
               $gte: calculatedStart,
               $lte: calculatedEnd
             },
-            'reviews.notes': { $exists: true, $ne: [] }
+            'reviews.comment': { $exists: true, $ne: '', $ne: null }
           }
         },
 
@@ -1554,74 +2084,119 @@ class MetricsService {
           { $match: userMatchFilters }
         ] : []),
 
-        // Desenrollar las notas individuales
-        { $unwind: '$reviews.notes' },
-        
         // Calcular score de interacción para cada review
         {
           $addFields: {
             interactionScore: {
               $add: [
-                1, // Peso base por mencionar la nota
-                { $multiply: [{ $size: '$reviews.likes' }, 2] }, // Likes valen 2 puntos
-                { $multiply: [{ $size: '$reviews.replies' }, 3] } // Respuestas valen 3 puntos
+                1, // Base de 1 punto por comentario
+                { 
+                  $multiply: [
+                    { 
+                      $cond: {
+                        if: { $and: [
+                          { $ifNull: ['$reviews.likes', false] },
+                          { $isArray: '$reviews.likes' }
+                        ]},
+                        then: { $size: '$reviews.likes' },
+                        else: 0
+                      }
+                    }, 
+                    2
+                  ] 
+                }, // Likes valen 2 puntos cada uno
+                { 
+                  $multiply: [
+                    { 
+                      $cond: {
+                        if: { $and: [
+                          { $ifNull: ['$reviews.replies', false] },
+                          { $isArray: '$reviews.replies' }
+                        ]},
+                        then: { $size: '$reviews.replies' },
+                        else: 0
+                      }
+                    }, 
+                    3
+                  ] 
+                } // Respuestas valen 3 puntos cada una
               ]
             }
           }
         },
 
-        // Agrupar por nota y sumar scores de interacción
+        // Hacer lookup para obtener datos del usuario del review
         {
-          $group: {
-            _id: '$reviews.notes',
-            totalInteractionScore: { $sum: '$interactionScore' },
-            reviewCount: { $sum: 1 },
-            users: { $addToSet: '$reviews.user' },
-            avgLikes: { $avg: { $size: '$reviews.likes' } },
-            avgReplies: { $avg: { $size: '$reviews.replies' } }
+          $lookup: {
+            from: 'users',
+            localField: 'reviews.user',
+            foreignField: '_id',
+            as: 'reviewAuthor'
           }
         },
-
-        // Calcular score normalizado (interacciones por review)
+        // No usar $unwind estricto para evitar perder comentarios de usuarios borrados
         {
           $addFields: {
-            normalizedScore: {
-              $divide: ['$totalInteractionScore', '$reviewCount']
+            reviewAuthor: {
+              $cond: {
+                if: { $gt: [{ $size: '$reviewAuthor' }, 0] },
+                then: { $arrayElemAt: ['$reviewAuthor', 0] },
+                else: {
+                  _id: '$reviews.user',
+                  nombre: 'Usuario eliminado',
+                  username: 'deleted_user'
+                }
+              }
             }
           }
         },
 
-        // Filtrar por mínimo de usuarios únicos (k-anonimato relajado)
-        {
-          $match: {
-            users: { $size: { $gte: 2 } } // Mínimo 2 usuarios diferentes
-          }
-        },
-
-        // Ordenar por score de interacción normalizado
-        { $sort: { normalizedScore: -1 } },
-
-        // Limitar a top 5
-        { $limit: 5 },
-
-        // Proyectar resultado final
+        // Proyectar datos del comentario
         {
           $project: {
             _id: 0,
-            note: '$_id',
-            interactionScore: '$totalInteractionScore',
-            normalizedScore: { $round: ['$normalizedScore', 2] },
-            reviewCount: 1,
-            userCount: { $size: '$users' },
-            avgLikes: { $round: ['$avgLikes', 1] },
-            avgReplies: { $round: ['$avgReplies', 1] }
+            reviewId: '$reviews._id',
+            comment: '$reviews.comment',
+            score: '$reviews.score',
+            likesCount: { 
+              $cond: {
+                if: { $and: [
+                  { $ifNull: ['$reviews.likes', false] },
+                  { $isArray: '$reviews.likes' }
+                ]},
+                then: { $size: '$reviews.likes' },
+                else: 0
+              }
+            },
+            repliesCount: { 
+              $cond: {
+                if: { $and: [
+                  { $ifNull: ['$reviews.replies', false] },
+                  { $isArray: '$reviews.replies' }
+                ]},
+                then: { $size: '$reviews.replies' },
+                else: 0
+              }
+            },
+            interactionScore: 1,
+            createdAt: '$reviews.createdAt',
+            authorName: '$reviewAuthor.nombre',
+            authorUsername: '$reviewAuthor.username',
+            yerbaName: '$nombre',
+            yerbaMarca: '$marca'
           }
-        }
+        },
+
+        // Ordenar por score de interacción descendente
+        { $sort: { interactionScore: -1 } },
+
+        // Limitar a top 5
+        { $limit: 5 }
       ];
 
       const results = await Yerba.aggregate(pipeline);
       
-      // Calcular total de reviews con notas para el contexto
+      // Calcular total de reviews con comentarios para el contexto
       const totalReviewsPipeline = [
         ...(Object.keys(yerbaMatchFilters).length > 0 ? [{ $match: yerbaMatchFilters }] : []),
         { $unwind: '$reviews' },
@@ -1631,7 +2206,7 @@ class MetricsService {
               $gte: calculatedStart,
               $lte: calculatedEnd
             },
-            'reviews.notes': { $exists: true, $ne: [] }
+            'reviews.comment': { $exists: true, $ne: '', $ne: null }
           }
         },
         ...(Object.keys(userMatchFilters).length > 0 ? [
@@ -1659,26 +2234,39 @@ class MetricsService {
       const totalReviews = totalData.length > 0 ? totalData[0].totalReviews : 0;
       const uniqueUsers = totalData.length > 0 ? totalData[0].uniqueUsers.length : 0;
 
-      // Traducir notas y formatear para el frontend
-      const formattedNotes = results.map((item, index) => {
-        // Calcular share basado en el score de interacción
-        const maxScore = results[0]?.normalizedScore || 1;
-        const share = maxScore > 0 ? item.normalizedScore / maxScore : 0;
+      // Formatear comentarios para el frontend
+      const formattedComments = results.map((item, index) => {
+        // Truncar comentario para mostrar
+        const truncatedComment = item.comment.length > 100 
+          ? item.comment.substring(0, 100) + '...'
+          : item.comment;
         
         return {
-          label: NOTE_TRANSLATIONS[item.note] || item.note,
-          share: share,
+          label: truncatedComment,
+          fullComment: item.comment,
+          author: item.authorName || 'Usuario eliminado', // Frontend espera 'author'
+          authorName: item.authorName || 'Usuario eliminado',
+          authorUsername: item.authorUsername || 'deleted_user',
+          yerba: `${item.yerbaName} (${item.yerbaMarca})`, // Frontend espera 'yerba'
+          yerbaName: item.yerbaName,
+          yerbaMarca: item.yerbaMarca,
+          score: item.score,
           interactionScore: item.interactionScore,
-          normalizedScore: item.normalizedScore,
-          reviewCount: item.reviewCount,
-          userCount: item.userCount,
-          avgLikes: item.avgLikes,
-          avgReplies: item.avgReplies
+          normalizedScore: item.interactionScore, // Para compatibilidad con frontend
+          likes: item.likesCount, // Frontend espera 'likes'
+          likesCount: item.likesCount,
+          replies: item.repliesCount, // Frontend espera 'replies'
+          repliesCount: item.repliesCount,
+          createdAt: item.createdAt,
+          reviewCount: 1, // Cada item es un review
+          userCount: 1, // Cada item es de un usuario
+          avgLikes: item.likesCount,
+          avgReplies: item.repliesCount
         };
       });
 
       const result = {
-        notes: formattedNotes,
+        notes: formattedComments, // Mantenemos 'notes' para compatibilidad con frontend
         sample: {
           nEvents: totalReviews,
           nRatings: totalReviews,
@@ -1686,26 +2274,96 @@ class MetricsService {
         },
         _meta: {
           cached: false,
-          source: 'interaction_based',
+          source: 'interaction_based_comments',
           generatedAt: new Date(),
           period: { start: calculatedStart, end: calculatedEnd },
           filters: filters,
-          algorithm: 'interaction_weighted'
+          algorithm: 'comment_interaction_weighted'
         }
       };
 
-      console.log('✅ Notas top por interacciones obtenidas:', {
-        notesCount: result.notes.length,
+      console.log('✅ Comentarios top por interacciones obtenidos:', {
+        commentsCount: result.notes.length,
         totalReviews: result.sample.nEvents,
         uniqueUsers: uniqueUsers,
-        source: 'interaction_based'
+        source: 'interaction_based_comments'
       });
 
       return result;
 
     } catch (error) {
-      console.error('❌ Error obteniendo notas top por interacciones:', error);
-      throw new Error(`Error generando datos de notas top por interacciones: ${error.message}`);
+      console.error('❌ Error obteniendo comentarios top por interacciones:', error);
+      throw new Error(`Error generando datos de comentarios top por interacciones: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtiene todas las entidades disponibles por tipo
+   */
+  async getAvailableEntities(entityType) {
+    try {
+      console.log(`🔍 Obteniendo entidades disponibles para: ${entityType}`);
+      
+      let field;
+      switch (entityType) {
+        case 'tipo':
+          field = 'tipo';
+          break;
+        case 'marca':
+          field = 'marca';
+          break;
+        case 'origen':
+          field = 'origen';
+          break;
+        case 'pais':
+        case 'paisProd':
+          field = 'pais';
+          break;
+        case 'secado':
+          field = 'secado';
+          break;
+        case 'establecimiento':
+          field = 'establecimiento';
+          break;
+        case 'containsPalo':
+        case 'palo':
+          field = 'containsPalo';
+          break;
+        case 'leafCut':
+        case 'corte':
+          field = 'leafCut';
+          break;
+        case 'tipoEstacionamiento':
+          field = 'tipoEstacionamiento';
+          break;
+        case 'tiempoEstacionamiento':
+          field = 'tiempoEstacionamiento';
+          break;
+        case 'produccion':
+          field = 'produccion';
+          break;
+        default:
+          console.warn(`⚠️ EntityType no reconocido: ${entityType}`);
+          return [];
+      }
+
+      // Obtener valores únicos del campo especificado
+      const entities = await Yerba.distinct(field);
+      
+      // Filtrar valores null, undefined o vacíos
+      const validEntities = entities.filter(entity => 
+        entity != null && 
+        entity !== '' && 
+        typeof entity === 'string' && 
+        entity.trim().length > 0
+      );
+
+      console.log(`📋 Entidades encontradas para ${entityType}:`, validEntities);
+      
+      return validEntities.sort(); // Ordenar alfabéticamente
+    } catch (error) {
+      console.error(`❌ Error obteniendo entidades para ${entityType}:`, error);
+      return [];
     }
   }
 

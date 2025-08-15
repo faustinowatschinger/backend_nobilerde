@@ -285,7 +285,7 @@ router.post('/cache/update-interval', async (req, res) => {
 
 /**
  * GET /api/metrics/notes-top
- * Obtiene las notas sensoriales más populares del período basado en interacciones
+ * Obtiene los comentarios con más interacciones del período basado en likes y respuestas
  */
 router.get('/metrics/notes-top', async (req, res) => {
   try {
@@ -312,16 +312,16 @@ router.get('/metrics/notes-top', async (req, res) => {
       }
     });
 
-    console.log('🎯 Notes top request with filters:', filters);
+    console.log('🎯 Comentarios top request with filters:', filters);
 
-    // Usar la nueva lógica basada en interacciones
+    // Usar la nueva lógica basada en interacciones de comentarios
     const data = await metricsService.getNotesTopByInteractions(filters);
     
     res.json(data);
   } catch (error) {
-    console.error('Error in notes top endpoint:', error);
+    console.error('Error in comentarios top endpoint:', error);
     res.status(500).json({ 
-      error: 'Error obteniendo notas sensoriales top',
+      error: 'Error obteniendo comentarios top',
       message: error.message 
     });
   }

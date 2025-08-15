@@ -1,208 +1,216 @@
 // backend/config/flavorNotes.js
+// Vocabulario controlado de notas sensoriales para yerba mate
 
 /**
- * Vocabulario controlado de notas sensoriales para mate
- * Usado para validación y agregación consistente de datos
+ * Mapeo de códigos de notas sensoriales a sus traducciones legibles
  */
-export const FLAVOR_CATEGORIES = {
-  // Amargor - Intensidad del sabor amargo
-  AMARGOR: [
-    'amargo_muy_bajo',
-    'amargo_bajo', 
-    'amargo_medio',
-    'amargo_alto',
-    'amargo_muy_alto'
-  ],
+export const NOTE_TRANSLATIONS = {
+  // Notas básicas de sabor
+  'amargo_suave': 'Amargo Suave',
+  'amargo_moderado': 'Amargo Moderado', 
+  'amargo_alto': 'Amargo Alto',
+  'amargo_intenso': 'Amargo Intenso',
+  'dulce_natural': 'Dulce Natural',
+  'dulce_residual': 'Dulce Residual',
   
-  // Características herbales
-  HERBAL: [
-    'herbal_fresco',
-    'herbal_seco',
-    'herbal_complejo',
-    'herbal_suave',
-    'herbal_intenso'
-  ],
+  // Notas herbales
+  'herbal_suave': 'Herbal Suave',
+  'herbal_intenso': 'Herbal Intenso',
+  'herbal_medicinal': 'Herbal Medicinal',
+  'herbal_fresco': 'Herbal Fresco',
   
-  // Textura en boca
-  TEXTURA: [
-    'cremoso',
-    'suave',
-    'aspero',
-    'polvoroso',
-    'sedoso',
-    'denso'
-  ],
+  // Notas terrosas
+  'terroso': 'Terroso',
+  'terroso_humedo': 'Terroso Húmedo',
+  'terroso_seco': 'Terroso Seco',
+  'mineral': 'Mineral',
   
-  // Intensidad aromática
-  AROMA: [
-    'aroma_intenso',
-    'aroma_suave',
-    'aroma_fresco',
-    'aroma_tostado',
-    'aroma_herbal'
-  ],
+  // Notas de madera/humo
+  'ahumado': 'Ahumado',
+  'ahumado_suave': 'Ahumado Suave',
+  'ahumado_intenso': 'Ahumado Intenso',
+  'madera': 'Madera',
+  'madera_verde': 'Madera Verde',
+  'madera_seca': 'Madera Seca',
   
-  // Cuerpo de la infusión
-  CUERPO: [
-    'cuerpo_liviano',
-    'cuerpo_medio',
-    'cuerpo_robusto',
-    'cuerpo_intenso',
-    'cuerpo_completo'
-  ],
+  // Notas vegetales
+  'vegetal': 'Vegetal',
+  'vegetal_fresco': 'Vegetal Fresco',
+  'hierba_cortada': 'Hierba Cortada',
+  'heno': 'Heno',
+  'pasto': 'Pasto',
   
-  // Sabores específicos
-  SABORES: [
-    'dulce_natural',
-    'terroso',
-    'citrico',
-    'frutal',
-    'floral',
-    'mineral',
-    'ahumado',
-    'maderoso'
-  ],
+  // Notas florales
+  'floral': 'Floral',
+  'floral_suave': 'Floral Suave',
+  'miel': 'Miel',
   
-  // Sensaciones
-  SENSACIONES: [
-    'equilibrado',
-    'astringente',
-    'refrescante',
-    'energizante',
-    'reconfortante',
-    'estimulante'
-  ],
+  // Notas frutales
+  'frutal': 'Frutal',
+  'citrico': 'Cítrico',
+  'frutal_seco': 'Frutal Seco',
   
-  // Cualidades específicas del mate
-  MATE_ESPECIFICO: [
-    'con_palo_notable',
-    'sin_palo_limpio',
-    'barbacua_presente',
-    'secado_natural',
-    'estacionamiento_largo',
-    'molienda_fina',
-    'molienda_gruesa'
+  // Notas de intensidad y cuerpo
+  'cuerpo_liviano': 'Cuerpo Liviano',
+  'cuerpo_medio': 'Cuerpo Medio',
+  'cuerpo_pleno': 'Cuerpo Pleno',
+  'intenso': 'Intenso',
+  'suave': 'Suave',
+  
+  // Notas de textura
+  'astringente': 'Astringente',
+  'cremoso': 'Cremoso',
+  'sedoso': 'Sedoso',
+  
+  // Notas aromáticas
+  'aroma_intenso': 'Aroma Intenso',
+  'aroma_suave': 'Aroma Suave',
+  'aroma_fresco': 'Aroma Fresco',
+  
+  // Notas específicas regionales
+  'estilo_argentino': 'Estilo Argentino',
+  'estilo_brasileno': 'Estilo Brasileño',
+  'estilo_paraguayo': 'Estilo Paraguayo',
+  'estilo_uruguayo': 'Estilo Uruguayo',
+  
+  // Características especiales
+  'balanceado': 'Balanceado',
+  'complejo': 'Complejo',
+  'simple': 'Simple',
+  'persistente': 'Persistente',
+  'fugaz': 'Fugaz',
+  
+  // Notas para yerbas compuestas
+  'menta': 'Menta',
+  'naranja': 'Naranja',
+  'limon': 'Limón',
+  'hierbas_serranas': 'Hierbas Serranas',
+  'peperina': 'Peperina',
+  'boldo': 'Boldo',
+  'cedron': 'Cedrón',
+  'manzanilla': 'Manzanilla',
+  'tilo': 'Tilo',
+  
+  // Notas adicionales
+  'polvo': 'Polvo',
+  'limpio': 'Limpio',
+  'sucio': 'Sucio',
+  'equilibrado': 'Equilibrado',
+  'rustico': 'Rústico',
+  'refinado': 'Refinado',
+  'tradicional': 'Tradicional',
+  'moderno': 'Moderno'
+};
+
+/**
+ * Categorías de notas sensoriales organizadas por tipo
+ */
+export const NOTE_CATEGORIES = {
+  sabor: [
+    'amargo_suave', 'amargo_moderado', 'amargo_alto', 'amargo_intenso',
+    'dulce_natural', 'dulce_residual'
+  ],
+  herbal: [
+    'herbal_suave', 'herbal_intenso', 'herbal_medicinal', 'herbal_fresco'
+  ],
+  terroso: [
+    'terroso', 'terroso_humedo', 'terroso_seco', 'mineral'
+  ],
+  ahumado: [
+    'ahumado', 'ahumado_suave', 'ahumado_intenso', 'madera', 
+    'madera_verde', 'madera_seca'
+  ],
+  vegetal: [
+    'vegetal', 'vegetal_fresco', 'hierba_cortada', 'heno', 'pasto'
+  ],
+  floral: [
+    'floral', 'floral_suave', 'miel'
+  ],
+  frutal: [
+    'frutal', 'citrico', 'frutal_seco'
+  ],
+  cuerpo: [
+    'cuerpo_liviano', 'cuerpo_medio', 'cuerpo_pleno', 'intenso', 'suave'
+  ],
+  textura: [
+    'astringente', 'cremoso', 'sedoso'
+  ],
+  aroma: [
+    'aroma_intenso', 'aroma_suave', 'aroma_fresco'
+  ],
+  regional: [
+    'estilo_argentino', 'estilo_brasileno', 'estilo_paraguayo', 'estilo_uruguayo'
+  ],
+  caracteristicas: [
+    'balanceado', 'complejo', 'simple', 'persistente', 'fugaz',
+    'equilibrado', 'rustico', 'refinado', 'tradicional', 'moderno'
+  ],
+  compuestas: [
+    'menta', 'naranja', 'limon', 'hierbas_serranas', 'peperina',
+    'boldo', 'cedron', 'manzanilla', 'tilo'
   ]
 };
 
 /**
- * Obtiene todas las notas válidas como array plano
+ * Obtiene todas las notas válidas como array
+ * @returns {string[]} Array con todos los códigos de notas válidas
  */
 export function getAllValidNotes() {
-  return Object.values(FLAVOR_CATEGORIES).flat();
+  return Object.keys(NOTE_TRANSLATIONS);
+}
+
+/**
+ * Obtiene todas las notas de una categoría específica
+ * @param {string} category - Nombre de la categoría
+ * @returns {string[]} Array con las notas de la categoría
+ */
+export function getNotesByCategory(category) {
+  return NOTE_CATEGORIES[category] || [];
+}
+
+/**
+ * Traduce un array de códigos de notas a sus nombres legibles
+ * @param {string[]} noteCodes - Array de códigos de notas
+ * @returns {string[]} Array de nombres traducidos
+ */
+export function translateNotes(noteCodes) {
+  if (!Array.isArray(noteCodes)) return [];
+  return noteCodes.map(code => NOTE_TRANSLATIONS[code] || code);
 }
 
 /**
  * Valida si una nota es válida
+ * @param {string} noteCode - Código de la nota a validar
+ * @returns {boolean} True si la nota es válida
  */
-export function isValidNote(note) {
-  return getAllValidNotes().includes(note);
+export function isValidNote(noteCode) {
+  return NOTE_TRANSLATIONS.hasOwnProperty(noteCode);
 }
 
 /**
- * Obtiene la categoría de una nota específica
+ * Obtiene notas recomendadas basadas en el tipo de yerba
+ * @param {string} tipoYerba - Tipo de yerba
+ * @returns {string[]} Array de notas recomendadas para ese tipo
  */
-export function getNoteCategory(note) {
-  for (const [category, notes] of Object.entries(FLAVOR_CATEGORIES)) {
-    if (notes.includes(note)) {
-      return category;
-    }
-  }
-  return null;
+export function getRecommendedNotesForType(tipoYerba) {
+  const recommendations = {
+    'Tradicional': ['amargo_moderado', 'herbal_intenso', 'terroso', 'cuerpo_pleno'],
+    'Suave': ['amargo_suave', 'herbal_suave', 'dulce_natural', 'cuerpo_liviano'],
+    'Despalada': ['amargo_alto', 'herbal_intenso', 'astringente', 'cuerpo_pleno'],
+    'Barbacuá': ['ahumado_intenso', 'madera_seca', 'terroso', 'cuerpo_pleno'],
+    'Compuesta': ['herbal_medicinal', 'floral', 'balanceado', 'complejo'],
+    'Orgánica': ['vegetal_fresco', 'limpio', 'natural', 'equilibrado']
+  };
+  
+  return recommendations[tipoYerba] || [];
 }
-
-/**
- * Agrupa notas por categoría
- */
-export function groupNotesByCategory(notes) {
-  const grouped = {};
-  
-  for (const note of notes) {
-    const category = getNoteCategory(note);
-    if (category) {
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-      grouped[category].push(note);
-    }
-  }
-  
-  return grouped;
-}
-
-/**
- * Traducciones de notas para frontend (español)
- */
-export const NOTE_TRANSLATIONS = {
-  // Amargor
-  'amargo_muy_bajo': 'Muy poco amargo',
-  'amargo_bajo': 'Poco amargo',
-  'amargo_medio': 'Amargo moderado',
-  'amargo_alto': 'Muy amargo',
-  'amargo_muy_alto': 'Extremadamente amargo',
-  
-  // Herbal
-  'herbal_fresco': 'Herbal fresco',
-  'herbal_seco': 'Herbal seco',
-  'herbal_complejo': 'Herbal complejo',
-  'herbal_suave': 'Herbal suave',
-  'herbal_intenso': 'Herbal intenso',
-  
-  // Textura
-  'cremoso': 'Cremoso',
-  'suave': 'Suave',
-  'aspero': 'Áspero',
-  'polvoroso': 'Polvoroso',
-  'sedoso': 'Sedoso',
-  'denso': 'Denso',
-  
-  // Aroma
-  'aroma_intenso': 'Aroma intenso',
-  'aroma_suave': 'Aroma suave',
-  'aroma_fresco': 'Aroma fresco',
-  'aroma_tostado': 'Aroma tostado',
-  'aroma_herbal': 'Aroma herbal',
-  
-  // Cuerpo
-  'cuerpo_liviano': 'Cuerpo liviano',
-  'cuerpo_medio': 'Cuerpo medio',
-  'cuerpo_robusto': 'Cuerpo robusto',
-  'cuerpo_intenso': 'Cuerpo intenso',
-  'cuerpo_completo': 'Cuerpo completo',
-  
-  // Sabores
-  'dulce_natural': 'Dulce natural',
-  'terroso': 'Terroso',
-  'citrico': 'Cítrico',
-  'frutal': 'Frutal',
-  'floral': 'Floral',
-  'mineral': 'Mineral',
-  'ahumado': 'Ahumado',
-  'maderoso': 'Maderoso',
-  
-  // Sensaciones
-  'equilibrado': 'Equilibrado',
-  'astringente': 'Astringente',
-  'refrescante': 'Refrescante',
-  'energizante': 'Energizante',
-  'reconfortante': 'Reconfortante',
-  'estimulante': 'Estimulante',
-  
-  // Mate específico
-  'con_palo_notable': 'Con palo notable',
-  'sin_palo_limpio': 'Sin palo, limpio',
-  'barbacua_presente': 'Barbacuá presente',
-  'secado_natural': 'Secado natural',
-  'estacionamiento_largo': 'Estacionamiento largo',
-  'molienda_fina': 'Molienda fina',
-  'molienda_gruesa': 'Molienda gruesa'
-};
 
 export default {
-  FLAVOR_CATEGORIES,
+  NOTE_TRANSLATIONS,
+  NOTE_CATEGORIES,
   getAllValidNotes,
+  getNotesByCategory,
+  translateNotes,
   isValidNote,
-  getNoteCategory,
-  groupNotesByCategory,
-  NOTE_TRANSLATIONS
+  getRecommendedNotesForType
 };
