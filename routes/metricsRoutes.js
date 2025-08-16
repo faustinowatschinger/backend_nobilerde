@@ -3,6 +3,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import dayjs from 'dayjs';
 import metricsService from '../services/metricsService.js';
+import { Yerba } from '../config/yerbasModel.js';
 
 const router = express.Router();
 
@@ -125,7 +126,14 @@ router.get('/trends', async (req, res) => {
             break;
           case 'containsPalo':
           case 'palo':
-            entityFilters.containsPalo = entity;
+            // Convertir entidades de "Con palo"/"Sin palo" a valores booleanos
+            if (entity === 'Con palo' || entity === 'con palo') {
+              entityFilters.containsPalo = true;
+            } else if (entity === 'Sin palo' || entity === 'sin palo') {
+              entityFilters.containsPalo = false;
+            } else {
+              entityFilters.containsPalo = entity;
+            }
             break;
           case 'leafCut':
           case 'corte':
@@ -160,10 +168,7 @@ router.get('/trends', async (req, res) => {
           entityFilters.tipoYerba = entityFilters.tipo;
         }
 
-        // Asegurar que campos booleanos o flags vengan como strings si es necesario
-        if (typeof entityFilters.containsPalo === 'boolean') {
-          entityFilters.containsPalo = entityFilters.containsPalo ? 'true' : 'false';
-        }
+        // Campos booleanos como containsPalo ya están correctamente convertidos arriba
 
         console.log(`📋 Filtros finales para entidad "${entity}":`, entityFilters);
 
@@ -568,7 +573,14 @@ router.get('/trends-comparison', async (req, res) => {
             break;
           case 'containsPalo':
           case 'palo':
-            entityFilters.containsPalo = entityName;
+            // Convertir entidades de "Con palo"/"Sin palo" a valores booleanos
+            if (entityName === 'Con palo' || entityName === 'con palo') {
+              entityFilters.containsPalo = true;
+            } else if (entityName === 'Sin palo' || entityName === 'sin palo') {
+              entityFilters.containsPalo = false;
+            } else {
+              entityFilters.containsPalo = entityName;
+            }
             break;
           case 'leafCut':
           case 'corte':
@@ -600,6 +612,13 @@ router.get('/trends-comparison', async (req, res) => {
         }
         if (entityFilters.tipo && !entityFilters.tipoYerba) {
           entityFilters.tipoYerba = entityFilters.tipo;
+        }
+
+        // Manejo especial para campos booleanos
+        if (entityFilters.containsPalo === 'Sí' || entityFilters.containsPalo === 'Si') {
+          entityFilters.containsPalo = true;
+        } else if (entityFilters.containsPalo === 'No') {
+          entityFilters.containsPalo = false;
         }
 
         console.log(`📋 Filtros finales para entidad "${entityName}":`, entityFilters);
@@ -1226,6 +1245,156 @@ router.get('/debug-metrics-new', async (req, res) => {
     console.error('❌ Error en debug-metrics-new:', error);
     res.status(500).json({ 
       error: 'Error en debug de métricas',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/metrics/debug-specific-entity
+ * Debug específico para entidades problemáticas
+ */
+router.get('/debug-specific-entity', async (req, res) => {
+  try {
+    const {
+      entity = 'Sí',
+      entityType = 'containsPalo',
+      metric = 'volumen'
+    } = req.query;
+
+    console.log('🔍 DEBUG-SPECIFIC - Analizando entidad específica:', {
+      entity,
+      entityType,
+      metric
+    });
+
+    // Calcular períodos
+    const currentEnd = dayjs();
+    const currentStart = currentEnd.subtract(1, 'month');
+
+    // Construir filtros para la entidad
+    const entityFilters = {};
+    switch (entityType) {
+      case 'tipo':
+        entityFilters.tipoYerba = entity;
+        break;
+      case 'marca':
+        entityFilters.marca = entity;
+        break;
+      case 'origen':
+        entityFilters.origen = entity;
+        break;
+      case 'pais':
+      case 'paisProd':
+        entityFilters.paisProd = entity;
+        break;
+      case 'secado':
+        entityFilters.secado = entity;
+        break;
+      case 'establecimiento':
+        entityFilters.establecimiento = entity;
+        break;
+      case 'containsPalo':
+      case 'palo':
+        // Convertir entidades de "Con palo"/"Sin palo" a valores booleanos
+        if (entity === 'Con palo' || entity === 'con palo') {
+          entityFilters.containsPalo = true;
+        } else if (entity === 'Sin palo' || entity === 'sin palo') {
+          entityFilters.containsPalo = false;
+        } else {
+          entityFilters.containsPalo = entity;
+        }
+        break;
+      case 'leafCut':
+      case 'corte':
+        entityFilters.leafCut = entity;
+        break;
+      case 'tipoEstacionamiento':
+        entityFilters.tipoEstacionamiento = entity;
+        break;
+      case 'tiempoEstacionamiento':
+        entityFilters.tiempoEstacionamiento = entity;
+        break;
+      case 'produccion':
+        entityFilters.produccion = entity;
+        break;
+      default:
+        entityFilters.tipoYerba = entity;
+    }
+
+    // Manejo especial para campos booleanos
+    if (entityFilters.containsPalo === 'Sí' || entityFilters.containsPalo === 'Si') {
+      entityFilters.containsPalo = true;
+    } else if (entityFilters.containsPalo === 'No') {
+      entityFilters.containsPalo = false;
+    }
+
+    console.log('🎯 DEBUG-SPECIFIC - Filtros construidos:', entityFilters);
+
+    // Construir queries separados para usuarios y yerbas
+    const userQuery = {};
+    const yerbaQuery = metricsService.buildYerbaQuery(entityFilters);
+
+    console.log('🔍 DEBUG-SPECIFIC - Queries separados:', {
+      userQuery,
+      yerbaQuery
+    });
+
+    // Verificar cuántas yerbas coinciden con el filtro
+    const matchingYerbas = await Yerba.find(yerbaQuery);
+    console.log(`📊 DEBUG-SPECIFIC - Yerbas que coinciden con el filtro: ${matchingYerbas.length}`);
+    
+    if (matchingYerbas.length > 0) {
+      console.log('🔍 DEBUG-SPECIFIC - Primeras 3 yerbas que coinciden:', 
+        matchingYerbas.slice(0, 3).map(y => ({
+          id: y._id,
+          marca: y.marca,
+          containsPalo: y.containsPalo,
+          establecimiento: y.establecimiento,
+          leafCut: y.leafCut
+        }))
+      );
+    }
+
+    // Obtener datos usando el servicio
+    const overviewData = await metricsService.getOverviewData({
+      ...entityFilters,
+      startDate: currentStart.format('YYYY-MM-DD'),
+      endDate: currentEnd.format('YYYY-MM-DD')
+    });
+
+    const response = {
+      entity,
+      entityType,
+      metric,
+      filters: entityFilters,
+      yerbaQuery,
+      matchingYerbasCount: matchingYerbas.length,
+      overviewData: {
+        usersWithTasting30d: overviewData.usersWithTasting30d,
+        discoveryEvents: overviewData.discoveryEvents,
+        temporalEvents: (overviewData.temporalActivity?.data || []).reduce((sum, item) => sum + (item.events || 0), 0),
+        temporalData: overviewData.temporalActivity?.data || []
+      },
+      sampleYerbas: matchingYerbas.slice(0, 3).map(y => ({
+        id: y._id,
+        marca: y.marca,
+        containsPalo: y.containsPalo,
+        establecimiento: y.establecimiento,
+        leafCut: y.leafCut,
+        tipo: y.tipo
+      }))
+    };
+
+    console.log('📤 DEBUG-SPECIFIC - Enviando resultado:', response);
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error en debug-specific-entity:', error);
+    res.status(500).json({ 
+      error: 'Error en debug específico',
       message: error.message,
       timestamp: new Date().toISOString()
     });

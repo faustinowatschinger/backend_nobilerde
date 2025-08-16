@@ -222,12 +222,26 @@ class MetricsService {
     if (filters.paisProd) query.pais = filters.paisProd;
     if (filters.secado) query.secado = filters.secado;
     if (filters.establecimiento) query.establecimiento = filters.establecimiento;
-    if (filters.containsPalo) query.containsPalo = filters.containsPalo;
+    
+    // Campos que requieren manejo especial para valores booleanos o string
+    if (filters.containsPalo !== undefined) {
+      // Convertir "Sí"/"No" a true/false
+      if (filters.containsPalo === 'Sí' || filters.containsPalo === 'Si' || filters.containsPalo === true) {
+        query.containsPalo = true;
+      } else if (filters.containsPalo === 'No' || filters.containsPalo === false) {
+        query.containsPalo = false;
+      } else {
+        query.containsPalo = filters.containsPalo;
+      }
+    }
+    
     if (filters.leafCut) query.leafCut = filters.leafCut;
     if (filters.tipoEstacionamiento) query.tipoEstacionamiento = filters.tipoEstacionamiento;
     if (filters.tiempoEstacionamiento) query.tiempoEstacionamiento = filters.tiempoEstacionamiento;
     if (filters.produccion) query.produccion = filters.produccion;
 
+    console.log('🎯 buildYerbaQuery - Query construido:', query);
+    
     return query;
   }
 
